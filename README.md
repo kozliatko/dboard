@@ -277,6 +277,12 @@ docker compose logs -f
 
 ---
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the release history.
+
+---
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
