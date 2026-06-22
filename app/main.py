@@ -23,7 +23,9 @@ log = logging.getLogger("dboard")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
 app = FastAPI()
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(
+    directory=os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
+)
 executor = ThreadPoolExecutor(max_workers=16)
 
 try:

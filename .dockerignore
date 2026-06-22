@@ -5,6 +5,11 @@ __pycache__
 .git
 .gitignore
 README.md
+CONTRIBUTING.md
 *.db
 *.db-wal
 *.db-shm
+tests/
+requirements-dev.txt
+pytest.ini
+.venv
