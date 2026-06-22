@@ -756,13 +756,19 @@
 
   // ── Global stacked resource chart ───────────────────────────────────────────
   const STACK_COLORS = ['#a78bfa', '#60a5fa', '#34d399', '#fbbf24', '#f472b6', '#22d3ee', '#fb923c', '#a3e635'];
+  const STACK_VBH = 170;
   let stackMetric = 'cpu';
   let stackRange = 3600;
   let lastStackLoad = 0;
+  let stackData = null;   // last rendered response (+ _max), for hover
 
   function stackColor(c, ci) { return c.name === 'other' ? '#64748b' : STACK_COLORS[ci % STACK_COLORS.length]; }
+  function stackFmt(metric) {
+    return metric === 'cpu' ? (v => v.toFixed(1) + '%') : metric === 'mem' ? (v => fmtMb(v)) : (v => fmtBytes(v) + '/s');
+  }
 
   function renderStack(resp) {
+    stackData = resp;
     const conts = resp.containers || [];
     const n = resp.count || 0;
     const chartEl = $('stack-chart'), legEl = $('stack-legend'), totEl = $('stack-total');
@@ -771,13 +777,13 @@
       legEl.innerHTML = ''; totEl.textContent = '';
       return;
     }
-    const fmtVal = resp.metric === 'cpu' ? (v => v.toFixed(0) + '%')
-      : resp.metric === 'mem' ? (v => fmtMb(v)) : (v => fmtBytes(v) + '/s');
+    const fmtVal = stackFmt(resp.metric);
 
-    const w = 600, h = 170;
+    const w = 600, h = STACK_VBH;
     const totals = [];
     for (let i = 0; i < n; i++) { let s = 0; for (const c of conts) s += (c.data[i] || 0); totals.push(s); }
     const max = Math.max.apply(null, totals.concat(0.001));
+    resp._max = max;
     const X = i => ((i / (n - 1)) * w).toFixed(1);
     const Y = v => (h - (v / max) * h * 0.94 - h * 0.03).toFixed(1);
 
@@ -808,6 +814,62 @@
       renderStack(r);
       lastStackLoad = Date.now();
     } catch (e) { /* keep last render */ }
+  }
+
+  function stackHoverEnd() {
+    const tip = $('stack-tip'), guide = $('stack-guide'), chartEl = $('stack-chart');
+    if (tip) tip.style.display = 'none';
+    if (guide) guide.style.display = 'none';
+    const svg = chartEl && chartEl.querySelector('svg');
+    if (svg) svg.querySelectorAll('path').forEach(p => p.setAttribute('fill-opacity', '0.82'));
+  }
+
+  function stackHover(e) {
+    const resp = stackData;
+    const chartEl = $('stack-chart'), panel = chartEl && chartEl.closest('.stack-panel');
+    const svg = chartEl && chartEl.querySelector('svg');
+    const tip = $('stack-tip'), guide = $('stack-guide');
+    if (!resp || resp.count < 2 || !svg || !tip || !panel) return;
+
+    const sRect = svg.getBoundingClientRect(), pRect = panel.getBoundingClientRect();
+    const px = e.clientX - sRect.left, py = e.clientY - sRect.top;
+    if (px < 0 || px > sRect.width || py < 0 || py > sRect.height) { stackHoverEnd(); return; }
+
+    const n = resp.count;
+    const i = Math.max(0, Math.min(n - 1, Math.round(px / sRect.width * (n - 1))));
+    const vbY = py / sRect.height * STACK_VBH;
+    const v = (STACK_VBH - STACK_VBH * 0.03 - vbY) / (STACK_VBH * 0.94) * (resp._max || 1);
+
+    // which stacked band contains the cursor height v
+    let cum = 0, hov = -1;
+    for (let k = 0; k < resp.containers.length; k++) {
+      const val = resp.containers[k].data[i] || 0;
+      if (val > 0 && v >= cum && v < cum + val) { hov = k; break; }
+      cum += val;
+    }
+
+    // vertical guide (relative to the panel)
+    const gx = e.clientX - pRect.left;
+    guide.style.display = 'block';
+    guide.style.left = gx + 'px';
+    guide.style.top = (sRect.top - pRect.top) + 'px';
+    guide.style.height = sRect.height + 'px';
+
+    const paths = svg.querySelectorAll('path');
+    if (hov >= 0) {
+      const c = resp.containers[hov], color = stackColor(c, hov), fmt = stackFmt(resp.metric);
+      paths.forEach((p, idx) => p.setAttribute('fill-opacity', idx === hov ? '0.95' : '0.35'));
+      const secAgo = (n - 1 - i) * (resp.interval || 30);
+      const tlabel = i === n - 1 ? 'now' : fmtSpan(secAgo);
+      tip.innerHTML = `<div class="tip-name"><span class="tip-dot" style="background:${color}"></span>${esc(c.name)}</div>`
+        + `<div class="tip-sub">${fmt(c.data[i] || 0)} · ${tlabel}</div>`;
+      tip.style.display = 'block';
+      tip.style.left = gx + 'px';
+      tip.style.top = (e.clientY - pRect.top) + 'px';
+    } else {
+      paths.forEach(p => p.setAttribute('fill-opacity', '0.82'));
+      tip.style.display = 'none';
+    }
   }
 
   async function refresh() {
@@ -883,6 +945,11 @@
     const b = e.target.closest('.seg-btn'); if (!b) return;
     stackRange = parseInt(b.dataset.range, 10); _segSelect(_stackRange, b); loadStack();
   });
+  const _stackChart = document.getElementById('stack-chart');
+  if (_stackChart) {
+    _stackChart.addEventListener('mousemove', stackHover);
+    _stackChart.addEventListener('mouseleave', stackHoverEnd);
+  }
 
   // Close on backdrop click or the × button.
   const _ov = document.getElementById('detail-overlay');

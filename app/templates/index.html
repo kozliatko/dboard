@@ -409,7 +409,18 @@
     .tab-panel.active { display: block; }
 
     /* ── Global stacked resource chart ────────────────────────────────────── */
-    .stack-panel { background:#0d0e1a; border:1px solid #1c1d30; border-radius:14px; padding:1rem 1.1rem 1.1rem; }
+    .stack-panel { position:relative; background:#0d0e1a; border:1px solid #1c1d30; border-radius:14px; padding:1rem 1.1rem 1.1rem; }
+    .stack-chart { position:relative; }
+    .stack-guide { position:absolute; width:1px; background:#ffffff30; pointer-events:none; display:none; z-index:10; }
+    .stack-tip {
+      position:absolute; pointer-events:none; z-index:20; display:none;
+      background:#16172a; border:1px solid #2e2b60; border-radius:.5rem; padding:.4rem .6rem;
+      font-family:'JetBrains Mono',monospace; font-size:.66rem; color:#e5e7eb; white-space:nowrap;
+      box-shadow:0 8px 24px -8px rgba(0,0,0,.7); transform:translate(-50%, calc(-100% - 12px));
+    }
+    .stack-tip .tip-name { display:flex; align-items:center; gap:.4rem; font-weight:500; }
+    .stack-tip .tip-dot { width:.55rem; height:.55rem; border-radius:2px; }
+    .stack-tip .tip-sub { color:#9aa1b2; margin-top:.18rem; }
     .stack-head { display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-bottom:.8rem; }
     .stack-title { font-size:.78rem; font-weight:600; color:#cbd5e1; letter-spacing:.01em; }
     .stack-title span { font-family:'JetBrains Mono',monospace; font-size:.72rem; color:#9aa1b2; margin-left:.4rem; }
@@ -581,6 +592,8 @@
         </div>
       </div>
       <div id="stack-chart" class="stack-chart"></div>
+      <div id="stack-guide" class="stack-guide"></div>
+      <div id="stack-tip" class="stack-tip"></div>
       <div id="stack-legend" class="stack-legend"></div>
     </div>
 

@@ -10,7 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Global stacked resource chart at the top of the Containers tab: per-container
   CPU / memory / network usage stacked over time, with metric and range
-  (10m / 1h / 6h / 24h) toggles and a legend. Backed by a new `GET /api/stack`
+  (10m / 1h / 6h / 24h) toggles and a legend. Hovering shows a vertical guide,
+  highlights the band under the cursor and a tooltip with the container name,
+  its value and the time at that point. Backed by a new `GET /api/stack`
   endpoint (top 8 containers by usage + an aggregated `other` band). Adds a
   `mem_mb` column to `container_metrics` so memory can be summed in absolute MB
   (with an automatic migration).

@@ -30,7 +30,7 @@ Monitors containers, host system metrics, and API token validity — all in one 
 
 - **Three-tab UI** — Containers, System, Tokens
 - **Container tables** — sortable and filterable; shows status, health, uptime, CPU, RAM, network I/O with per-column sparklines
-- **Global stacked chart** — at the top of the Containers tab: per-container CPU / memory / network usage stacked over time, with metric and range (10m / 1h / 6h / 24h) toggles
+- **Global stacked chart** — at the top of the Containers tab: per-container CPU / memory / network usage stacked over time, with metric and range (10m / 1h / 6h / 24h) toggles and hover tooltips (container, value, time)
 - **Container detail overlay** — click any row for a larger view: live CPU, memory and network-rate area charts with a time axis, a selectable range (live / 1h / 6h / 24h, from SQLite history), plus metadata
 - **System panel** — live CPU, RAM, swap, disk, network I/O, disk I/O rates with SVG sparklines and visual thresholds (warn/crit); click any card for a detail overlay with larger charts and a selectable range (live / 1h / 6h / 24h)
 - **API token validation** — checks key validity without exposing the raw key value; shows service metadata (rate limits, model lists, account info)
