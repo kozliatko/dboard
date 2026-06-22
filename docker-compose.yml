@@ -1,0 +1,29 @@
+services:
+  dboard:
+    build: .
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /:/host:ro
+      - dboard_data:/app/data
+    networks:
+      - default
+      - caddy
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      GITLAB_TOKEN: ${GITLAB_TOKEN:-}
+      GITLAB_HOST: ${GITLAB_HOST:-}
+    # No caddy labels needed — the app self-injects /dboard/* into Caddy
+    # via the Docker socket + Caddy admin API on startup and every 30s.
+
+networks:
+  caddy:
+    external: true
+
+volumes:
+  dboard_data:
