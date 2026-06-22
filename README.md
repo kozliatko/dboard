@@ -15,6 +15,9 @@ Monitors containers, host system metrics, and API token validity — all in one 
 **Containers** — sortable/filterable tables with live CPU, RAM, net I/O and per-column sparklines:
 ![Containers tab](docs/screenshot-containers.png)
 
+**Container detail** — click any row for a larger view: live CPU, memory and network-rate charts with a time axis:
+![Container detail overlay](docs/screenshot-detail.png)
+
 **System** — host metrics with SVG sparklines and warn/crit thresholds:
 ![System tab](docs/screenshot-system.png)
 
