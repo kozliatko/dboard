@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Application icon: SVG master plus favicon (`.ico` + PNG), Apple touch icon and
-  PWA manifest icons, wired into the page `<head>` with `theme-color`.
+  PWA manifest icons, wired into the page `<head>` with `theme-color`. Also shown
+  as the logo in the page header.
 - Documentation: how the disk-probe mechanism works and a step-by-step guide for
   monitoring additional separate disks.
 
