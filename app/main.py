@@ -88,6 +88,42 @@ def _dock():
     return _docker
 
 
+# ── Background sampling ───────────────────────────────────────────────────────
+# When SAMPLE_INTERVAL > 0 a task samples metrics on a fixed cadence regardless
+# of open dashboards, so history is recorded even when nobody is watching. The
+# API endpoints then serve the latest in-memory snapshot (no per-request gather,
+# even cadence, single DB writer). When 0, metrics are gathered on demand per
+# request as before — zero load while idle.
+def _env_int(name: str, default: int) -> int:
+    try:
+        return max(0, int((os.environ.get(name) or "").strip() or default))
+    except ValueError:
+        return default
+
+
+SAMPLE_INTERVAL = _env_int("SAMPLE_INTERVAL", 0)
+_latest_lock = threading.Lock()
+_latest_system: dict | None = None
+_latest_containers: dict | None = None
+
+
+async def _sampler():
+    """Periodically sample system + container metrics into the latest snapshot."""
+    global _latest_system, _latest_containers
+    loop = asyncio.get_event_loop()
+    log.info("Background sampling enabled (every %ds)", SAMPLE_INTERVAL)
+    while True:
+        try:
+            sysd = await loop.run_in_executor(executor, _system_stats_sync)
+            cond = await _collect_containers()
+            with _latest_lock:
+                _latest_system = sysd
+                _latest_containers = cond
+        except Exception as e:
+            log.warning("Sampler error: %s", e)
+        await asyncio.sleep(SAMPLE_INTERVAL)
+
+
 async def _db_pruner():
     while True:
         await asyncio.sleep(3600)
@@ -101,6 +137,8 @@ async def _db_pruner():
 async def startup():
     await asyncio.get_event_loop().run_in_executor(executor, _db_init)
     asyncio.create_task(_db_pruner())
+    if SAMPLE_INTERVAL > 0:
+        asyncio.create_task(_sampler())
 
 
 # ── Docker helpers ────────────────────────────────────────────────────────────
@@ -767,6 +805,10 @@ async def service_worker():
 
 @app.get("/api/system")
 async def api_system():
+    if SAMPLE_INTERVAL > 0:
+        with _latest_lock:
+            if _latest_system is not None:
+                return _latest_system
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(executor, _system_stats_sync)
 
@@ -810,6 +852,15 @@ async def api_tokens(refresh: bool = False):
 
 @app.get("/api/containers")
 async def api_containers():
+    if SAMPLE_INTERVAL > 0:
+        with _latest_lock:
+            if _latest_containers is not None:
+                return _latest_containers
+    return await _collect_containers()
+
+
+async def _collect_containers() -> dict:
+    """Gather all container stats, update sparklines, persist, return the payload."""
     d = _dock()
     if not d:
         return {"error": "Docker socket not available", "proxied": [], "others": []}

@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Optional background metrics sampling (`SAMPLE_INTERVAL`, default 30s, set 0 to
+  disable). When enabled, a task samples system + container metrics on a fixed
+  cadence so history is recorded even with no dashboard open; the API endpoints
+  then serve the latest in-memory snapshot (single DB writer, even cadence).
 - Installable Progressive Web App: an app-shell service worker (`/sw.js`,
   served at root scope) caches the static shell with stale-while-revalidate and
   bypasses `/api/*` so metrics stay live; works offline. Manifest gains an `id`

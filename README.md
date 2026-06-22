@@ -29,7 +29,7 @@ Monitors containers, host system metrics, and API token validity — all in one 
 - **Container tables** — sortable and filterable; shows status, health, uptime, CPU, RAM, network I/O with per-column sparklines
 - **System panel** — live CPU, RAM, swap, disk, network I/O, disk I/O rates with SVG sparklines and visual thresholds (warn/crit)
 - **API token validation** — checks key validity without exposing the raw key value; shows service metadata (rate limits, model lists, account info)
-- **SQLite persistence** — sparkline history survives restarts; 24-hour retention
+- **SQLite persistence** — sparkline history survives restarts; 24-hour retention; optional background sampling records history even when no dashboard is open
 - **Hardened by default** — read-only Docker API proxy, non-root container, HTTP Basic Auth, strict CSP, no third-party runtime JS
 - **Installable PWA** — app-shell service worker; the UI loads instantly and works offline, while metrics are always fetched live
 - **HEALTHCHECK** — built-in Docker healthcheck on `/`
@@ -74,6 +74,7 @@ All variables are optional. Leave any blank to disable that token check.
 
 | Variable | Description |
 |---|---|
+| `SAMPLE_INTERVAL` | Background metrics sampling cadence in seconds. `30` (default) records history continuously even with no dashboard open; `0` samples on demand only (no idle load). |
 | `ANTHROPIC_API_KEY` | Anthropic API key |
 | `GITHUB_TOKEN` | GitHub personal access token |
 | `GITLAB_TOKEN` | GitLab personal access token |
@@ -236,6 +237,7 @@ Caddy (caddy-docker-proxy)
 FastAPI (uvicorn, port 8000, non-root, read-only rootfs)
   ├── ThreadPoolExecutor  — blocking docker/psutil/urllib calls
   ├── Background task     — SQLite pruner every 1 h
+  ├── Background task     — metrics sampler every SAMPLE_INTERVAL s (optional)
   ├── Docker SDK ─────────► socket-proxy (tcp:2375) ──► docker.sock  (GET only, POST blocked)
   ├── psutil              — CPU/RAM/disk/net/temp
   ├── urllib.request      — external token APIs (cached 5 min)
