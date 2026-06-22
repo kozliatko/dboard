@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- System detail overlay: clicking any System-tab card opens a combined host
+  overlay with larger CPU, memory, CPU-temp (if available), network-I/O and
+  disk-I/O charts, the same live / 1h / 6h / 24h range selector, and host
+  metadata. Backed by a new `GET /api/system-history` endpoint over `sys_metrics`.
 - Selectable time range in the container detail overlay: **live / 1h / 6h / 24h**.
   The live view uses the in-memory ring buffer (~10 min, auto-updating); longer
   ranges are served by a new `GET /api/history` endpoint that reads and

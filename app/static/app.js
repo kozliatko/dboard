@@ -193,6 +193,7 @@
   }
 
   function renderSystem(s) {
+    lastSys = s;
     let html = '';
     const sp = s.sparklines || {};
 
@@ -319,6 +320,7 @@
 
   const rawData = { proxied: [], others: [] };
   let sampleInterval = 5;   // seconds between samples (from the API)
+  let lastSys = null;       // latest /api/system payload (for the system overlay)
   const sortState = {
     proxied: { col: null, dir: 1 },
     others:  { col: null, dir: 1 },
@@ -456,7 +458,8 @@
 
   // ── Container detail overlay ────────────────────────────────────────────────
   let _gid = 0;
-  let activeDetail = null;
+  let activeDetail = null;    // container name when detailKind === 'container'
+  let detailKind = null;      // null | 'container' | 'system'
   let detailRange = 'live';   // 'live' (ring buffer) | seconds (DB history)
   let lastHistLoad = 0;
 
@@ -572,17 +575,90 @@
     const detailsHtml = `<div class="ov-details">${details.map(d =>
       `<div><div class="ov-detail-k">${d[0]}</div><div class="ov-detail-v">${d[1]}</div></div>`).join('')}</div>`;
 
-    const ranges = [['live', 'live'], ['3600', '1h'], ['21600', '6h'], ['86400', '24h']];
-    const rangeSel = `<div class="ov-ranges">${ranges.map(([v, l]) =>
-      `<button class="ov-range-btn ${String(detailRange) === v ? 'active' : ''}" data-range="${v}">${l}</button>`).join('')}</div>`;
-
     return `<div class="ov-head"><div>
         <div class="ov-title"><span class="ov-dot" style="background:${dot};box-shadow:0 0 8px ${dot}99"></span><h2>${esc(c.name)}</h2></div>
         <div class="ov-sub">${sub}</div>${chips}
       </div>
       <button class="ov-close" aria-label="Close">×</button></div>
-      ${rangeSel}
+      ${rangeSelector()}
       <div class="ov-metrics">${cpuCard}${memCard}${netCard}</div>
+      ${detailsHtml}`;
+  }
+
+  function rangeSelector() {
+    const ranges = [['live', 'live'], ['3600', '1h'], ['21600', '6h'], ['86400', '24h']];
+    return `<div class="ov-ranges">${ranges.map(([v, l]) =>
+      `<button class="ov-range-btn ${String(detailRange) === v ? 'active' : ''}" data-range="${v}">${l}</button>`).join('')}</div>`;
+  }
+
+  // ── System overlay ──────────────────────────────────────────────────────────
+  function systemLiveSeries(sys) {
+    const sp = sys.sparklines || {};
+    return {
+      cpu: sp.cpu, mem: sp.mem, temp: sp.temp,
+      net_rx: sp.net_rx, net_tx: sp.net_tx, disk_r: sp.disk_r, disk_w: sp.disk_w,
+      interval: sampleInterval,
+    };
+  }
+
+  function renderSystemDetail(sys, s) {
+    const iv = s.interval || sampleInterval;
+    const cpuColor = sysBarColor(sys.cpu_percent || 0);
+    const memColor = sysBarColor(sys.mem_percent || 0);
+
+    const cpuCard = detailMetric('CPU',
+      `<span style="color:${cpuColor}">${sys.cpu_percent}<small>%</small></span>`,
+      chart([{ data: s.cpu, color: cpuColor }], iv), thresholdClass(sys.cpu_percent || 0, 70, 90));
+
+    const memCard = detailMetric('Memory',
+      `<span style="color:${memColor}">${fmtMb(sys.mem_used_mb)}<small> / ${fmtMb(sys.mem_total_mb)} · ${sys.mem_percent}%</small></span>`,
+      chart([{ data: s.mem, color: memColor }], iv), thresholdClass(sys.mem_percent || 0, 80, 92));
+
+    let tempCard = '';
+    if (sys.cpu_temp != null) {
+      const tColor = sys.cpu_temp >= 85 ? '#f87171' : sys.cpu_temp >= 70 ? '#fb923c' : '#34d399';
+      tempCard = detailMetric('CPU Temp',
+        `<span style="color:${tColor}">${sys.cpu_temp}<small>°C</small></span>`,
+        chart([{ data: s.temp, color: '#fb923c' }], iv), thresholdClass(sys.cpu_temp, 70, 85));
+    }
+
+    const nr = sys.net_rate || {}, dr = sys.disk_rate || {};
+    const ioCard = (label, aLbl, aVal, aColor, bLbl, bVal, bColor, da, db) => `<div class="ov-metric span2">
+      <div class="ov-metric-label" style="display:flex;justify-content:space-between;align-items:center">
+        <span>${label}</span>
+        <span class="ov-legend"><span style="color:${aColor}">● ${aLbl}</span><span style="color:${bColor}">● ${bLbl}</span></span>
+      </div>
+      <div class="ov-net"><span style="color:${aColor}">${aVal}</span><span style="color:${bColor}">${bVal}</span></div>
+      <div class="ov-chart">${chart([{ data: da, color: aColor }, { data: db, color: bColor }], iv)}</div></div>`;
+
+    const netCard = ioCard('Network I/O',
+      'rx', '↓ ' + (nr.rx_bps != null ? fmtBytes(nr.rx_bps) + '/s' : '—'), '#34d399',
+      'tx', '↑ ' + (nr.tx_bps != null ? fmtBytes(nr.tx_bps) + '/s' : '—'), '#60a5fa',
+      s.net_rx, s.net_tx);
+    const diskCard = ioCard('Disk I/O',
+      'read', 'R ' + (dr.read_bps != null ? fmtBytes(dr.read_bps) + '/s' : '—'), '#f59e0b',
+      'write', 'W ' + (dr.write_bps != null ? fmtBytes(dr.write_bps) + '/s' : '—'), '#a78bfa',
+      s.disk_r, s.disk_w);
+
+    const details = [];
+    if (sys.uptime) details.push(['Uptime', esc(sys.uptime)]);
+    details.push(['CPU', `${sys.cpu_phys} cores / ${sys.cpu_count} threads`]);
+    if (sys.load_avg) details.push(['Load avg', sys.load_avg.join('  ')]);
+    if (sys.swap_total_mb > 0) details.push(['Swap', `${fmtMb(sys.swap_used_mb)} / ${fmtMb(sys.swap_total_mb)} (${sys.swap_percent}%)`]);
+    for (const d of (sys.disks || [])) details.push([`Disk ${esc(d.mount)}`, `${d.used_gb} / ${d.total_gb} GB (${d.percent}%)`]);
+    const detailsHtml = `<div class="ov-details">${details.map(d =>
+      `<div><div class="ov-detail-k">${d[0]}</div><div class="ov-detail-v">${d[1]}</div></div>`).join('')}</div>`;
+
+    const sub = [`${sys.cpu_phys} cores`, sys.uptime ? '↑' + esc(sys.uptime) : null]
+      .filter(Boolean).map(x => `<span>${x}</span>`).join('<span style="color:#374151">·</span>');
+
+    return `<div class="ov-head"><div>
+        <div class="ov-title"><span class="ov-dot" style="background:#a78bfa;box-shadow:0 0 8px #a78bfa99"></span><h2>System</h2></div>
+        <div class="ov-sub">${sub}</div>
+      </div>
+      <button class="ov-close" aria-label="Close">×</button></div>
+      ${rangeSelector()}
+      <div class="ov-metrics">${cpuCard}${memCard}${tempCard}${netCard}${diskCard}</div>
       ${detailsHtml}`;
   }
 
@@ -595,16 +671,33 @@
     };
   }
 
-  function renderInto(c, s) { $('detail-panel').innerHTML = renderDetail(c, s); }
+  function renderContainerInto(c, s) { $('detail-panel').innerHTML = renderDetail(c, s); }
+  function renderSystemInto(sys, s) { $('detail-panel').innerHTML = renderSystemDetail(sys, s); }
 
-  // Fetch a longer range from SQLite (downsampled) and render it.
+  function showOverlay() {
+    const ov = $('detail-overlay');
+    ov.classList.add('open');
+    ov.setAttribute('aria-hidden', 'false');
+  }
+
+  // Fetch a longer container range from SQLite (downsampled) and render it.
   async function loadHistory() {
     const c = findContainer(activeDetail);
     if (!c) return;
     try {
       const h = await xhrJson(`/api/history?name=${encodeURIComponent(activeDetail)}&range=${detailRange}`);
-      if (activeDetail === h.name) {
-        renderInto(c, { cpu: h.cpu, mem: h.mem, net_rx: h.net_rx, net_tx: h.net_tx, interval: h.interval });
+      if (detailKind === 'container' && activeDetail === h.name) {
+        renderContainerInto(c, { cpu: h.cpu, mem: h.mem, net_rx: h.net_rx, net_tx: h.net_tx, interval: h.interval });
+        lastHistLoad = Date.now();
+      }
+    } catch (e) { /* keep last render */ }
+  }
+
+  async function loadSystemHistory() {
+    try {
+      const h = await xhrJson(`/api/system-history?range=${detailRange}`);
+      if (detailKind === 'system' && lastSys) {
+        renderSystemInto(lastSys, h);          // h already has the series keys + interval
         lastHistLoad = Date.now();
       }
     } catch (e) { /* keep last render */ }
@@ -612,37 +705,49 @@
 
   function setRange(r) {
     detailRange = r;
-    if (r === 'live') {
-      const c = findContainer(activeDetail);
-      if (c) renderInto(c, liveSeries(c));
-    } else {
-      loadHistory();
+    if (detailKind === 'container') {
+      if (r === 'live') { const c = findContainer(activeDetail); if (c) renderContainerInto(c, liveSeries(c)); }
+      else loadHistory();
+    } else if (detailKind === 'system') {
+      if (r === 'live') { if (lastSys) renderSystemInto(lastSys, systemLiveSeries(lastSys)); }
+      else loadSystemHistory();
     }
   }
 
   function openDetail(name) {
     const c = findContainer(name);
     if (!c) return;
+    detailKind = 'container';
     activeDetail = name;
     detailRange = 'live';
-    renderInto(c, liveSeries(c));
-    const ov = $('detail-overlay');
-    ov.classList.add('open');
-    ov.setAttribute('aria-hidden', 'false');
+    renderContainerInto(c, liveSeries(c));
+    showOverlay();
+  }
+
+  function openSystemDetail() {
+    if (!lastSys) return;
+    detailKind = 'system';
+    activeDetail = null;
+    detailRange = 'live';
+    renderSystemInto(lastSys, systemLiveSeries(lastSys));
+    showOverlay();
   }
 
   function updateDetail() {
-    if (!activeDetail) return;
-    const c = findContainer(activeDetail);
-    if (!c) return;
-    if (detailRange === 'live') {
-      renderInto(c, liveSeries(c));            // live ring-buffer, refresh each tick
-    } else if (Date.now() - lastHistLoad > 15000) {
-      loadHistory();                           // refresh longer ranges periodically
+    if (detailKind === 'container') {
+      const c = findContainer(activeDetail);
+      if (!c) return;
+      if (detailRange === 'live') renderContainerInto(c, liveSeries(c));
+      else if (Date.now() - lastHistLoad > 15000) loadHistory();
+    } else if (detailKind === 'system') {
+      if (!lastSys) return;
+      if (detailRange === 'live') renderSystemInto(lastSys, systemLiveSeries(lastSys));
+      else if (Date.now() - lastHistLoad > 15000) loadSystemHistory();
     }
   }
 
   function closeDetail() {
+    detailKind = null;
     activeDetail = null;
     const ov = $('detail-overlay');
     ov.classList.remove('open');
@@ -706,6 +811,10 @@
       if (tr) openDetail(tr.dataset.cname);
     });
   });
+  // Open the system overlay on any system card click.
+  const _sysGrid = document.getElementById('sys-grid');
+  if (_sysGrid) _sysGrid.addEventListener('click', () => openSystemDetail());
+
   // Close on backdrop click or the × button.
   const _ov = document.getElementById('detail-overlay');
   if (_ov) _ov.addEventListener('click', (e) => {

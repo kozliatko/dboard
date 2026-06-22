@@ -846,6 +846,34 @@ async def api_history(name: str, range: int = 3600):
     return await loop.run_in_executor(executor, _history_sync, name, rng)
 
 
+def _system_history_sync(rng: int) -> dict:
+    """Downsampled host history from SQLite for the last `rng` seconds."""
+    bucket = max(1, rng // 160)
+    frm = int(time.time()) - rng
+    with _db_lock:
+        rows = _db().execute(
+            "SELECT avg(cpu),avg(mem),avg(temp),avg(net_rx),avg(net_tx),avg(disk_r),avg(disk_w) "
+            "FROM sys_metrics WHERE ts>=? GROUP BY ts/? ORDER BY ts/?",
+            (frm, bucket, bucket)
+        ).fetchall()
+    keys = ("cpu", "mem", "temp", "net_rx", "net_tx", "disk_r", "disk_w")
+    out = {k: [] for k in keys}
+    for row in rows:
+        for k, v in zip(keys, row):
+            out[k].append((round(v, 1) if k in ("cpu", "mem", "temp") else round(v))
+                          if v is not None else None)
+    out["range"] = rng
+    out["interval"] = bucket
+    return out
+
+
+@app.get("/api/system-history")
+async def api_system_history(range: int = 3600):
+    rng = max(60, min(int(range), _DB_RETENTION))
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(executor, _system_history_sync, rng)
+
+
 @app.get("/api/system")
 async def api_system():
     if SAMPLE_INTERVAL > 0:

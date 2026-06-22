@@ -31,7 +31,7 @@ Monitors containers, host system metrics, and API token validity — all in one 
 - **Three-tab UI** — Containers, System, Tokens
 - **Container tables** — sortable and filterable; shows status, health, uptime, CPU, RAM, network I/O with per-column sparklines
 - **Container detail overlay** — click any row for a larger view: live CPU, memory and network-rate area charts with a time axis, a selectable range (live / 1h / 6h / 24h, from SQLite history), plus metadata
-- **System panel** — live CPU, RAM, swap, disk, network I/O, disk I/O rates with SVG sparklines and visual thresholds (warn/crit)
+- **System panel** — live CPU, RAM, swap, disk, network I/O, disk I/O rates with SVG sparklines and visual thresholds (warn/crit); click any card for a detail overlay with larger charts and a selectable range (live / 1h / 6h / 24h)
 - **API token validation** — checks key validity without exposing the raw key value; shows service metadata (rate limits, model lists, account info)
 - **SQLite persistence** — sparkline history survives restarts; 24-hour retention; optional background sampling records history even when no dashboard is open
 - **Hardened by default** — read-only Docker API proxy, non-root container, HTTP Basic Auth, strict CSP, no third-party runtime JS
@@ -172,6 +172,7 @@ once.
 | `GET /api/containers` | All containers with live stats and sparkline history |
 | `GET /api/history?name=<c>&range=<seconds>` | Downsampled CPU/mem/net history for one container, from SQLite (up to 24h) |
 | `GET /api/system` | Host metrics + sparkline ring buffers |
+| `GET /api/system-history?range=<seconds>` | Downsampled host CPU/mem/temp/net/disk-I/O history, from SQLite (up to 24h) |
 | `GET /api/tokens` | Token validation results (5-min cache) |
 | `GET /api/tokens?refresh=true` | Force re-validation of all tokens |
 
