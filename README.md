@@ -30,7 +30,7 @@ Monitors containers, host system metrics, and API token validity — all in one 
 - **System panel** — live CPU, RAM, swap, disk, network I/O, disk I/O rates with SVG sparklines and visual thresholds (warn/crit)
 - **API token validation** — checks key validity without exposing the raw key value; shows service metadata (rate limits, model lists, account info)
 - **SQLite persistence** — sparkline history survives restarts; 24-hour retention
-- **Caddy auto-registration** — self-injects `/dboard/*` route via the Caddy admin API; no manual config required
+- **Hardened by default** — read-only Docker API proxy, non-root container, HTTP Basic Auth, strict CSP, no third-party runtime JS
 - **HEALTHCHECK** — built-in Docker healthcheck on `/`
 
 ---
@@ -47,10 +47,21 @@ Monitors containers, host system metrics, and API token validity — all in one 
 ```bash
 cp .env.example .env
 # Optionally fill in API keys for token validation
+
+# Set the hostname and a Basic Auth password in docker-compose.yml:
+#   labels.caddy: your-domain.example.com
+#   labels.caddy.basic_auth.admin: "<hash>"
+# Generate the hash with (note: double every '$' to '$$' in compose):
+docker exec caddy caddy hash-password --plaintext 'choose-a-strong-password'
+
 docker compose up -d
 ```
 
-The dashboard is available at `https://<your-domain>/dboard/` within a few seconds of startup.
+The dashboard is served at `https://<your-domain>/` (default in this repo:
+`https://dboard.kozliatko.sk/`) and is gated by HTTP Basic Auth.
+
+> **Routing** is handled by [caddy-docker-proxy](https://github.com/lucaslorentz/caddy-docker-proxy)
+> labels — no manual Caddy config and no Caddy admin-API manipulation.
 
 ---
 
@@ -75,11 +86,20 @@ Copy `.env.example` to `.env` and populate the keys you want validated.
 
 ### Volumes
 
-| Mount | Purpose |
-|---|---|
-| `/var/run/docker.sock:ro` | Docker API access (read-only) |
-| `/:/host:ro` | Host filesystem for disk usage stats (read-only) |
-| `dboard_data:/app/data` | SQLite database persistence across restarts |
+dboard itself mounts **no Docker socket** and **not the host root**. The Docker
+API is reached read-only through a separate `socket-proxy` service, and only
+narrow, non-sensitive directories are exposed for disk stats.
+
+| Mount | On | Purpose |
+|---|---|---|
+| `/var/run/docker.sock:ro` | `socket-proxy` | Docker API — proxied read-only, writes blocked |
+| `/opt/dboard/diskprobe:/host/root:ro` | `dboard` | Empty dir on the `/` filesystem → `statvfs` reports `/` usage without exposing any files |
+| `/boot:/host/boot:ro` | `dboard` | `/boot` filesystem usage |
+| `dboard_data:/app/data` | `dboard` | SQLite history (writable, owned by the non-root app user) |
+
+Create the probe directory once on the host: `sudo mkdir -p /opt/dboard/diskprobe`.
+To monitor additional filesystems, add a read-only mount + a matching entry in
+`_DISK_PROBES` in `app/main.py`.
 
 ---
 
@@ -132,7 +152,7 @@ A **↻ refresh** button forces immediate re-validation.
 
 Each card shows:
 - Green / red status dot
-- Key hint in the form `first8chars···last4chars` — the actual key is never rendered
+- Key hint in the form `first4chars···last4chars` — the actual key is never rendered
 - Service-specific metadata:
   - **Anthropic** — model count, latest model names, request rate limit
   - **GitHub** — username, repo counts, OAuth scopes, expiry, rate limit
@@ -148,22 +168,24 @@ Each card shows:
 
 ```
 browser
-  │  (every 5 s)
-  ├── GET /dboard/api/containers  ──► Docker SDK → container list + docker stats
-  ├── GET /dboard/api/system      ──► psutil → CPU/RAM/disk/net/temp
-  └── GET /dboard/api/tokens      ──► urllib.request → external APIs (cached 5 min)
-
-FastAPI (uvicorn, port 8000)
+  │  HTTPS + Basic Auth
+  ▼
+Caddy (caddy-docker-proxy)
+  └── dboard.kozliatko.sk → reverse_proxy dboard:8000   (basic_auth, via labels)
+        │  (every 5 s)
+        ├── GET /api/containers  ─┐
+        ├── GET /api/system       │
+        └── GET /api/tokens       │
+                                  ▼
+FastAPI (uvicorn, port 8000, non-root, read-only rootfs)
   ├── ThreadPoolExecutor  — blocking docker/psutil/urllib calls
-  ├── Background task     — Caddy route re-injection every 10 s
   ├── Background task     — SQLite pruner every 1 h
+  ├── Docker SDK ─────────► socket-proxy (tcp:2375) ──► docker.sock  (GET only, POST blocked)
+  ├── psutil              — CPU/RAM/disk/net/temp
+  ├── urllib.request      — external token APIs (cached 5 min)
   └── SQLite (WAL)        — /app/data/metrics.db
           ├── sys_metrics        (one row per /api/system call)
           └── container_metrics  (one row × container per /api/containers call)
-
-Caddy
-  └── /dboard/* → reverse_proxy dboard:8000 (strip /dboard prefix)
-      (route injected at startup via Caddy admin API on localhost:2019)
 ```
 
 ### Tech stack
@@ -176,7 +198,8 @@ Caddy
 | Container metrics | Docker SDK for Python |
 | HTTP (token checks) | `urllib.request` (stdlib, no extra deps) |
 | Database | SQLite 3 (stdlib), WAL mode |
-| Frontend | Vanilla JS, Tailwind CSS (CDN) |
+| Frontend | Vanilla JS (external `app.js`), Tailwind CSS (self-hosted, built at image time) |
+| Docker API | Read-only via `tecnativa/docker-socket-proxy` |
 | Fonts | Outfit, JetBrains Mono (Google Fonts) |
 | Charts | Inline SVG `<polyline>` — no chart library |
 
@@ -187,27 +210,37 @@ Caddy
 ```
 .
 ├── app/
-│   ├── main.py              # FastAPI app — routes, stats, token validators, Caddy watcher
+│   ├── main.py              # FastAPI app — routes, stats, token validators
+│   ├── static/
+│   │   └── app.js           # Frontend logic (served as a self-hosted asset)
 │   └── templates/
-│       └── index.html       # Single-page dashboard (HTML + CSS + JS)
-├── docker-compose.yml       # Service definition
-├── Dockerfile               # python:3.12-slim, HEALTHCHECK, port 8000
-├── requirements.txt         # Python dependencies (no SQLite — stdlib)
+│       └── index.html       # Single-page dashboard shell (HTML + inline CSS)
+├── docker-compose.yml       # dboard + read-only socket-proxy
+├── Dockerfile               # multi-stage: Tailwind build + non-root runtime
+├── requirements.txt         # Pinned Python dependencies
 ├── .env.example             # Environment variable template
 └── .gitignore
 ```
 
 ---
 
-## Caddy integration
+## Routing
 
-dboard injects a route into Caddy on startup via the [Caddy admin API](https://caddyserver.com/docs/api) (`localhost:2019`).
+dboard is published with [caddy-docker-proxy](https://github.com/lucaslorentz/caddy-docker-proxy)
+labels on the `dboard` service:
 
-The route uses a `path_regexp` matcher (`^/dboard(/|$)`) and strips the `/dboard` prefix before proxying to the container. It is placed at index 0 of the route list so it takes priority.
+```yaml
+labels:
+  caddy: dboard.kozliatko.sk
+  caddy.reverse_proxy: "{{upstreams 8000}}"
+  caddy.basic_auth.admin: "$$2a$$14$$..."   # bcrypt hash, '$' doubled for compose
+```
 
-The route is re-verified every 10 seconds. If Caddy restarts and loses its config, the route is re-injected automatically.
-
-No Caddy labels are needed on the dboard container itself.
+Caddy obtains the TLS certificate, terminates HTTPS, enforces Basic Auth, and
+proxies to the container. dboard does **not** touch the Caddy admin API or the
+Docker socket to configure routing — it only needs the standard label
+convention. The dboard service joins both the project `default` network and the
+shared external `caddy` network.
 
 ---
 
@@ -215,11 +248,14 @@ No Caddy labels are needed on the dboard container itself.
 
 | Concern | Mitigation |
 |---|---|
-| Docker socket exposure | Mounted read-only; only list/inspect/stats operations used |
-| Host filesystem access | Mounted read-only; only `os.stat()` and `os.statvfs()` are called — no file reads |
-| API key exposure | Keys read from environment; only a redacted hint (`first8···last4`) is ever sent to the browser |
-| No authentication | dboard has no built-in auth; protect with Caddy [`basic_auth`](https://caddyserver.com/docs/caddyfile/directives/basic_auth) if needed |
-| Secrets in git | `.env` is in `.gitignore`; only `.env.example` (with empty values) is committed |
+| Docker API abuse / container escape | dboard never mounts the raw socket. It talks to `tecnativa/docker-socket-proxy` over TCP, which whitelists **GET** `containers`/`version` only — **all writes (POST) are blocked (403)**. A read-only bind mount of `docker.sock` would *not* do this; the socket stays read-write at the API level regardless of `:ro`. |
+| Host filesystem disclosure | Only an empty probe dir on `/` and `/boot` are mounted read-only — **never the host root**. `/etc`, `/root`, `/home`, SSH keys and other projects' `.env` files are not visible to the container. |
+| Privilege escalation | Container runs as **non-root** (uid 10001), `cap_drop: ALL`, `no-new-privileges`, read-only root filesystem (`tmpfs` for `/tmp`). |
+| Unauthenticated access | All traffic is gated by Caddy **HTTP Basic Auth**. Note: containers *already on the shared `caddy` network* can still reach `dboard:8000` directly — treat that network as trusted. |
+| API key exposure | Keys read from environment; only a minimal redacted hint (`first4···last4`) is sent to the browser — never the raw key. Forced re-validation (`?refresh=true`) is throttled server-wide to protect upstream rate limits / paid balances. |
+| Cross-site scripting | All dynamic values are HTML-escaped. A strict **Content-Security-Policy** (`script-src 'self'`, no inline scripts, no third-party CDNs) is sent on every response, plus `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`. |
+| Supply chain | No runtime CDN — Tailwind is compiled to a static stylesheet at image build time. Python deps are pinned. CI runs **gitleaks** (secret scan) and **trivy** (vuln scan). |
+| Secrets in git | `.env` is in `.gitignore`; only `.env.example` (with empty values) is committed. |
 
 ---
 

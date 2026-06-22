@@ -1,15 +1,38 @@
 services:
+  # Read-only Docker API proxy. dboard never touches /var/run/docker.sock
+  # directly — it talks to this proxy over TCP, which only forwards
+  # whitelisted GET endpoints (containers + version). All writes (POST) are
+  # blocked, so even a fully compromised dboard cannot create/modify
+  # containers or escape to the host via the Docker API.
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    restart: unless-stopped
+    environment:
+      CONTAINERS: 1      # GET /containers/json, /containers/{id}/json, /stats
+      VERSION: 1         # GET /version — needed for SDK API negotiation
+      POST: 0            # block every write operation
+      # everything else stays disabled (default 0)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - default
+    # The security boundary here is the API whitelist (POST=0, only GET
+    # containers/version). The entrypoint rewrites its own haproxy.cfg, so the
+    # rootfs can't be read-only; no-new-privileges still blocks escalation.
+    security_opt:
+      - no-new-privileges:true
+
   dboard:
     build: .
     restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /:/host:ro
-      - dboard_data:/app/data
+    depends_on:
+      - socket-proxy
     networks:
       - default
       - caddy
     environment:
+      # Talk to the Docker API through the read-only proxy, never the raw socket
+      DOCKER_HOST: tcp://socket-proxy:2375
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
@@ -18,8 +41,27 @@ services:
       TAVILY_API_KEY: ${TAVILY_API_KEY:-}
       GITLAB_TOKEN: ${GITLAB_TOKEN:-}
       GITLAB_HOST: ${GITLAB_HOST:-}
-    # No caddy labels needed — the app self-injects /dboard/* into Caddy
-    # via the Docker socket + Caddy admin API on startup and every 30s.
+    volumes:
+      # Narrow host mounts for disk stats only — NOT the whole root filesystem.
+      # /etc, /root, /home and SSH keys are never exposed to the container.
+      - /opt/dboard/diskprobe:/host/root:ro   # empty dir on the root (/) fs → statvfs gives / usage
+      - /boot:/host/boot:ro                   # /boot filesystem usage
+      - dboard_data:/app/data                 # SQLite metrics history (writable)
+    tmpfs:
+      - /tmp
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      caddy: dboard.kozliatko.sk
+      caddy.reverse_proxy: "{{upstreams 8000}}"
+      caddy.encode: gzip zstd
+      # HTTP Basic Auth. Generate a hash with:
+      #   docker exec caddy caddy hash-password --plaintext '<your-password>'
+      # '$' must be doubled to '$$' inside compose. Default user: admin.
+      caddy.basic_auth.admin: "$$2a$$14$$XXvoODukWeOxyaG18xgY7ezbMrYPcDQN2.6Cndn8BzlBI1Z8cW1g2"
 
 networks:
   caddy:

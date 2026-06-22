@@ -28,8 +28,31 @@ jobs:
       - name: Run tests
         run: pytest tests/ -v
 
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so the secret scan covers past commits
+
+      - name: Secret scan (gitleaks)
+        run: |
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz" \
+            | tar xz gitleaks
+          ./gitleaks detect --source . --no-banner --redact --verbose
+
+      - name: Dependency & config vuln scan (trivy)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '0'   # report, don't block (flip to 1 to enforce)
+
   build:
-    needs: test
+    needs: [test, scan]
     runs-on: ubuntu-latest
     permissions:
       contents: read

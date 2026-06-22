@@ -7,3 +7,9 @@ __pycache__/
 *.db
 *.db-wal
 *.db-shm
+
+# Generated at Docker build time by the Tailwind CLI
+app/static/tailwind.css
+
+# Local virtualenv
+.venv/

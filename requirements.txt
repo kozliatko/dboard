@@ -1,6 +1,8 @@
-docker>=7.0.0
-fastapi>=0.110.0
-uvicorn[standard]>=0.29.0
-jinja2>=3.1.4
-python-dateutil>=2.9.0
-psutil>=5.9.0
+# Pinned for reproducible builds. Bump deliberately (Dependabot/Renovate),
+# not implicitly. Versions verified working together as of 2026-06.
+docker==7.1.0
+fastapi==0.138.0
+uvicorn[standard]==0.49.0
+jinja2==3.1.6
+python-dateutil==2.9.0.post0
+psutil==7.2.2

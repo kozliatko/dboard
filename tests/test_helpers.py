@@ -72,7 +72,7 @@ class TestKeyHint:
     def test_normal_key(self):
         key = "sk-ant-api03-abcdefgh1234"
         hint = _key_hint(key)
-        assert hint.startswith("sk-ant-a")
+        assert hint.startswith("sk-a")
         assert hint.endswith("1234")
         assert "···" in hint
         assert key not in hint
@@ -85,13 +85,14 @@ class TestKeyHint:
     def test_short_key_returns_placeholder(self):
         assert _key_hint("short") == "···"
 
-    def test_exactly_eight_chars_returns_placeholder(self):
-        assert _key_hint("12345678") == "···"
+    def test_twelve_chars_returns_placeholder(self):
+        # boundary: keys of 12 chars or fewer reveal nothing
+        assert _key_hint("123456789012") == "···"
 
     def test_structure(self):
         hint = _key_hint("abcdefghijklmnop")
-        # first 8 + ··· + last 4
-        assert hint == "abcdefgh···mnop"
+        # first 4 + ··· + last 4
+        assert hint == "abcd···mnop"
 
 
 # ── _extras ───────────────────────────────────────────────────────────────────

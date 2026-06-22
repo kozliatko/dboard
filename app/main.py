@@ -17,173 +17,69 @@ import docker
 from dateutil import parser as date_parser
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 log = logging.getLogger("dboard")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
+_APP_DIR = os.path.dirname(os.path.abspath(__file__))
+
 app = FastAPI()
-templates = Jinja2Templates(
-    directory=os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
-)
+templates = Jinja2Templates(directory=os.path.join(_APP_DIR, "templates"))
+_static_dir = os.path.join(_APP_DIR, "static")
+if os.path.isdir(_static_dir):
+    app.mount("/static", StaticFiles(directory=_static_dir), name="static")
 executor = ThreadPoolExecutor(max_workers=16)
 
-try:
-    _docker = docker.from_env()
-except Exception as e:
-    _docker = None
-    log.error("Docker unavailable: %s", e)
-
-# ── Caddy route injection ─────────────────────────────────────────────────────
-
-CADDY_ROUTE_MARKER = "dboard-injected"
-
-_DBOARD_ROUTE_TEMPLATE = {
-    "match": [{"path_regexp": {"pattern": "^/dboard(/|$)"}}],
-    "handle": [
-        {
-            "handler": "subroute",
-            "routes": [
-                {
-                    "handle": [
-                        {"handler": "rewrite", "strip_path_prefix": "/dboard"},
-                        {
-                            "handler": "reverse_proxy",
-                            "upstreams": [{"dial": "{dial}"}],
-                        },
-                    ]
-                }
-            ],
-        }
-    ],
-    # non-terminal: path-only match, lets host-routes still handle non-/dboard paths
-    "@id": CADDY_ROUTE_MARKER,
-}
+# Content-Security-Policy: only self-hosted assets execute. No inline <script>,
+# no third-party CDNs. 'unsafe-inline' is allowed for styles only because the
+# template uses inline style= attributes and a <style> block (CSS cannot exfiltrate).
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src https://fonts.gstatic.com; "
+    "img-src 'self' data:; "
+    "connect-src 'self'; "
+    "base-uri 'none'; "
+    "form-action 'none'; "
+    "frame-ancestors 'none'"
+)
 
 
-def _find_caddy_container():
-    if not _docker:
-        return None
-    for c in _docker.containers.list():
-        tags = c.image.tags or []
-        if any("caddy" in t.lower() for t in tags):
-            return c
-    return None
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    resp = await call_next(request)
+    resp.headers["Content-Security-Policy"] = _CSP
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["X-Frame-Options"] = "DENY"
+    resp.headers["Referrer-Policy"] = "no-referrer"
+    resp.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    return resp
 
 
-def _own_dial_address() -> str:
-    """Resolve own container name for use as a Caddy upstream dial address."""
-    try:
-        hostname = open("/etc/hostname").read().strip()
-        for c in _docker.containers.list():
-            if c.short_id == hostname or c.id.startswith(hostname):
-                return f"{c.name.lstrip('/')}:8000"
-    except Exception:
-        pass
-    return os.environ.get("DBOARD_DIAL", "dboard-dboard-1:8000")
+# Docker client is created lazily and cached. The Docker API is reached over
+# TCP via the read-only socket-proxy, which may not be resolvable yet at import
+# time; retrying on demand avoids permanently disabling container stats if the
+# proxy comes up a moment later.
+_docker = None
+_docker_lock = threading.Lock()
 
 
-def _caddy_exec(caddy_container, cmd: list[str]) -> tuple[int, bytes]:
-    result = caddy_container.exec_run(cmd)
-    return result.exit_code, result.output or b""
-
-
-def _find_srv0(caddy) -> str | None:
-    """Find the server key that listens on :443."""
-    code, out = _caddy_exec(
-        caddy, ["curl", "-sf", "http://localhost:2019/config/apps/http/servers/"]
-    )
-    if code != 0:
-        return None
-    try:
-        servers = json.loads(out)
-        for name, srv in servers.items():
-            if ":443" in srv.get("listen", []):
-                return name
-        # fallback: first server
-        return next(iter(servers), "srv0")
-    except Exception:
-        return "srv0"
-
-
-def _inject_caddy_route_sync() -> str:
-    """Check Caddy routes and ensure /dboard/* is at position 0. Returns status string."""
-    caddy = _find_caddy_container()
-    if not caddy:
-        return "caddy container not found"
-
-    srv = _find_srv0(caddy) or "srv0"
-    routes_url = f"http://localhost:2019/config/apps/http/servers/{srv}/routes"
-
-    # Read current routes
-    code, out = _caddy_exec(caddy, ["curl", "-sf", routes_url])
-    if code != 0:
-        return f"caddy admin unreachable (exit {code})"
-
-    try:
-        routes = json.loads(out)
-        if not isinstance(routes, list):
-            routes = []
-    except Exception:
-        return f"invalid routes JSON: {out[:80]}"
-
-    if not routes:
-        return "routes empty — caddy not ready yet"
-
-    # Check if already at position 0
-    if routes[0].get("@id") == CADDY_ROUTE_MARKER:
-        return "already present"
-
-    # Remove any stale dboard entry (might be at wrong position)
-    filtered = [r for r in routes if r.get("@id") != CADDY_ROUTE_MARKER]
-
-    # Build route with resolved dial address
-    dial = _own_dial_address()
-    route = json.loads(json.dumps(_DBOARD_ROUTE_TEMPLATE))
-    route["handle"][0]["routes"][0]["handle"][1]["upstreams"][0]["dial"] = dial
-
-    # Replace the routes array using DELETE + PUT.
-    # We MUST target /routes directly — PATCH on /servers/srv0 replaces the
-    # entire server object (removing listen: [":443"]) which breaks Caddy.
-    new_routes = [route] + filtered
-    routes_payload = json.dumps(new_routes)
-
-    # Delete existing routes array, then recreate it with our route prepended.
-    # The window between DELETE and PUT is <100ms so impact is negligible.
-    del_code, _ = _caddy_exec(
-        caddy,
-        ["curl", "-sf", "-X", "DELETE", routes_url],
-    )
-    if del_code != 0:
-        return "DELETE routes failed"
-
-    code, out = _caddy_exec(
-        caddy,
-        [
-            "curl", "-sf", "-X", "PUT",
-            "-H", "Content-Type: application/json",
-            "-d", routes_payload,
-            routes_url,
-        ],
-    )
-    if code != 0:
-        return f"inject failed (exit {code}): {out[:120]}"
-
-    log.info("Injected /dboard/* at position 0 → %s (server: %s)", dial, srv)
-    return f"injected → {dial}"
-
-
-async def _caddy_watcher():
-    """Background task: ensure /dboard/ route stays in Caddy config."""
-    while True:
-        try:
-            loop = asyncio.get_event_loop()
-            status = await loop.run_in_executor(executor, _inject_caddy_route_sync)
-            if status not in ("already present",):
-                log.info("Caddy route status: %s", status)
-        except Exception as e:
-            log.warning("Caddy watcher error: %s", e)
-        await asyncio.sleep(10)
+def _dock():
+    global _docker
+    if _docker is None:
+        with _docker_lock:
+            if _docker is None:
+                try:
+                    client = docker.from_env()
+                    client.ping()
+                    _docker = client
+                except Exception as e:
+                    log.warning("Docker connect failed (will retry): %s", e)
+                    _docker = None
+    return _docker
 
 
 async def _db_pruner():
@@ -198,7 +94,6 @@ async def _db_pruner():
 @app.on_event("startup")
 async def startup():
     await asyncio.get_event_loop().run_in_executor(executor, _db_init)
-    asyncio.create_task(_caddy_watcher())
     asyncio.create_task(_db_pruner())
 
 
@@ -219,7 +114,10 @@ def _extract_domains(labels: dict) -> list[str]:
 
 def _stats_sync(container_id: str) -> dict:
     try:
-        c = docker.from_env().containers.get(container_id)
+        d = _dock()
+        if not d:
+            return {}
+        c = d.containers.get(container_id)
         if c.status != "running":
             return {}
         raw = c.stats(stream=False)
@@ -288,16 +186,22 @@ def _image_name(container) -> str:
 
 # ── System stats ─────────────────────────────────────────────────────────────
 
+# Each entry: (probe path inside the container, label to display).
+# These map to narrow, non-sensitive read-only bind mounts in docker-compose —
+# NOT the whole host root filesystem. statvfs() reports filesystem-level usage,
+# so an empty probe directory on a given fs yields that fs's stats without
+# exposing any of its files. Add more (mount, label) pairs as needed.
+_DISK_PROBES = [
+    ("/host/root", "/"),
+    ("/host/boot", "/boot"),
+]
+
+
 def _host_disks() -> list[dict]:
-    """Probe distinct filesystems on the host (mounted at /host) via device IDs."""
+    """Report usage of the host filesystems exposed via narrow /host/* mounts."""
     disks = []
     seen_devs: set[int] = set()
-    probes = [
-        "/host", "/host/boot", "/host/boot/efi",
-        "/host/home", "/host/var", "/host/opt",
-        "/host/data", "/host/tmp", "/host/srv",
-    ]
-    for path in probes:
+    for path, label in _DISK_PROBES:
         try:
             dev = os.stat(path).st_dev
             if dev in seen_devs:
@@ -309,9 +213,8 @@ def _host_disks() -> list[dict]:
             used = total - free
             if total == 0:
                 continue
-            mount = path[len("/host"):] or "/"
             disks.append({
-                "mount": mount,
+                "mount": label,
                 "total_gb": round(total / 1024 ** 3, 1),
                 "used_gb": round(used / 1024 ** 3, 1),
                 "free_gb": round(free / 1024 ** 3, 1),
@@ -334,6 +237,9 @@ def _fmt_uptime(secs: int) -> str:
 
 
 _io_prev: dict = {}
+# Guards _io_prev and the _spark ring buffers, which are read-modify-written
+# from executor threads (concurrent /api/system requests would otherwise race).
+_io_lock = threading.Lock()
 
 _SPARK_N = 40  # ~200 s at 5 s refresh interval
 _spark: dict[str, deque] = {
@@ -513,40 +419,42 @@ def _system_stats_sync() -> dict:
     try:
         net_now = psutil.net_io_counters()
         disk_now = psutil.disk_io_counters()
-        if _io_prev and (dt := now - _io_prev["t"]) > 0:
-            net_rate = {
-                "rx_bps": round((net_now.bytes_recv - _io_prev["net_rx"]) / dt),
-                "tx_bps": round((net_now.bytes_sent - _io_prev["net_tx"]) / dt),
-            }
-            if disk_now and _io_prev.get("disk_r") is not None:
-                disk_rate = {
-                    "read_bps":  round((disk_now.read_bytes  - _io_prev["disk_r"]) / dt),
-                    "write_bps": round((disk_now.write_bytes - _io_prev["disk_w"]) / dt),
+        with _io_lock:
+            if _io_prev and (dt := now - _io_prev["t"]) > 0:
+                net_rate = {
+                    "rx_bps": round((net_now.bytes_recv - _io_prev["net_rx"]) / dt),
+                    "tx_bps": round((net_now.bytes_sent - _io_prev["net_tx"]) / dt),
                 }
-        _io_prev = {
-            "t":      now,
-            "net_rx": net_now.bytes_recv,
-            "net_tx": net_now.bytes_sent,
-            "disk_r": disk_now.read_bytes  if disk_now else None,
-            "disk_w": disk_now.write_bytes if disk_now else None,
-        }
+                if disk_now and _io_prev.get("disk_r") is not None:
+                    disk_rate = {
+                        "read_bps":  round((disk_now.read_bytes  - _io_prev["disk_r"]) / dt),
+                        "write_bps": round((disk_now.write_bytes - _io_prev["disk_w"]) / dt),
+                    }
+            _io_prev = {
+                "t":      now,
+                "net_rx": net_now.bytes_recv,
+                "net_tx": net_now.bytes_sent,
+                "disk_r": disk_now.read_bytes  if disk_now else None,
+                "disk_w": disk_now.write_bytes if disk_now else None,
+            }
     except Exception:
         pass
 
     cpu_temp = _cpu_temp()
     mem_pct = round(mem_used / mem.total * 100, 1) if mem.total else 0
 
-    # Update sparkline ring buffers
-    _spark["cpu"].append(round(cpu_pct, 1))
-    _spark["mem"].append(mem_pct)
-    if cpu_temp is not None:
-        _spark["temp"].append(cpu_temp)
-    if net_rate:
-        _spark["net_rx"].append(net_rate["rx_bps"])
-        _spark["net_tx"].append(net_rate["tx_bps"])
-    if disk_rate:
-        _spark["disk_r"].append(disk_rate["read_bps"])
-        _spark["disk_w"].append(disk_rate["write_bps"])
+    # Update sparkline ring buffers (shared across executor threads)
+    with _io_lock:
+        _spark["cpu"].append(round(cpu_pct, 1))
+        _spark["mem"].append(mem_pct)
+        if cpu_temp is not None:
+            _spark["temp"].append(cpu_temp)
+        if net_rate:
+            _spark["net_rx"].append(net_rate["rx_bps"])
+            _spark["net_tx"].append(net_rate["tx_bps"])
+        if disk_rate:
+            _spark["disk_r"].append(disk_rate["read_bps"])
+            _spark["disk_w"].append(disk_rate["write_bps"])
 
     _db_write_sys(int(time.time()), round(cpu_pct, 1), mem_pct, cpu_temp, net_rate, disk_rate)
 
@@ -782,11 +690,20 @@ _TOKEN_DEFS = [
 _TOKEN_CACHE: dict = {}
 _TOKEN_CACHE_TTL = 300  # 5 minutes
 
+# Global throttle for forced refresh. Without it, an unauthenticated caller
+# could spam ?refresh=true and burn the real upstream rate limits / paid
+# balances of the configured API keys. Honour a forced refresh at most once
+# per interval, server-wide.
+_REFRESH_MIN_INTERVAL = 60  # seconds
+_last_forced_refresh = 0.0
+_refresh_lock = threading.Lock()
+
 
 def _key_hint(key: str) -> str:
-    if len(key) <= 8:
+    # Reveal as little as possible: only enough to tell two keys apart.
+    if len(key) <= 12:
         return "···"
-    return f"{key[:8]}···{key[-4:]}"
+    return f"{key[:4]}···{key[-4:]}"
 
 
 def _check_token_sync(td: dict) -> dict:
@@ -839,6 +756,16 @@ async def api_system():
 @app.get("/api/tokens")
 async def api_tokens(refresh: bool = False):
     now = time.monotonic()
+
+    # Throttle forced refreshes globally so the upstream APIs can't be hammered.
+    if refresh:
+        global _last_forced_refresh
+        with _refresh_lock:
+            if now - _last_forced_refresh < _REFRESH_MIN_INTERVAL:
+                refresh = False  # too soon — serve from cache instead
+            else:
+                _last_forced_refresh = now
+
     results = []
     to_check = []
 
@@ -865,11 +792,12 @@ async def api_tokens(refresh: bool = False):
 
 @app.get("/api/containers")
 async def api_containers():
-    if not _docker:
+    d = _dock()
+    if not d:
         return {"error": "Docker socket not available", "proxied": [], "others": []}
 
     try:
-        all_containers = _docker.containers.list(all=True)
+        all_containers = d.containers.list(all=True)
     except Exception as e:
         return {"error": str(e), "proxied": [], "others": []}
 
