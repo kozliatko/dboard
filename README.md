@@ -10,6 +10,19 @@ Monitors containers, host system metrics, and API token validity — all in one 
 
 ---
 
+## Screenshots
+
+**Containers** — sortable/filterable tables with live CPU, RAM, net I/O and per-column sparklines:
+![Containers tab](docs/screenshot-containers.png)
+
+**System** — host metrics with SVG sparklines and warn/crit thresholds:
+![System tab](docs/screenshot-system.png)
+
+**Tokens** — API key validation without exposing raw values:
+![Tokens tab](docs/screenshot-tokens.png)
+
+---
+
 ## Features
 
 - **Three-tab UI** — Containers, System, Tokens
