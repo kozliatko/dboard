@@ -17,7 +17,7 @@ import psutil
 import docker
 from dateutil import parser as date_parser
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -46,6 +46,8 @@ _CSP = (
     "font-src https://fonts.gstatic.com; "
     "img-src 'self' data:; "
     "connect-src 'self'; "
+    "worker-src 'self'; "
+    "manifest-src 'self'; "
     "base-uri 'none'; "
     "form-action 'none'; "
     "frame-ancestors 'none'"
@@ -749,6 +751,18 @@ def _check_token_sync(td: dict) -> dict:
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
     return templates.TemplateResponse(request, "index.html")
+
+
+@app.get("/sw.js")
+async def service_worker():
+    # Served from the root so the worker can control the whole origin (a worker
+    # under /static/ would be scoped to /static/ only). 'no-cache' keeps the
+    # worker script itself fresh; Service-Worker-Allowed pins the broad scope.
+    return FileResponse(
+        os.path.join(_static_dir, "sw.js"),
+        media_type="application/javascript",
+        headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"},
+    )
 
 
 @app.get("/api/system")

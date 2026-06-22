@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Installable Progressive Web App: an app-shell service worker (`/sw.js`,
+  served at root scope) caches the static shell with stale-while-revalidate and
+  bypasses `/api/*` so metrics stay live; works offline. Manifest gains an `id`
+  and maskable icons; CSP gains `worker-src`/`manifest-src`.
 - Application icon: SVG master plus favicon (`.ico` + PNG), Apple touch icon and
   PWA manifest icons, wired into the page `<head>` with `theme-color`. Also shown
   as the logo in the page header.

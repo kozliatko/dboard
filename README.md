@@ -31,6 +31,7 @@ Monitors containers, host system metrics, and API token validity — all in one 
 - **API token validation** — checks key validity without exposing the raw key value; shows service metadata (rate limits, model lists, account info)
 - **SQLite persistence** — sparkline history survives restarts; 24-hour retention
 - **Hardened by default** — read-only Docker API proxy, non-root container, HTTP Basic Auth, strict CSP, no third-party runtime JS
+- **Installable PWA** — app-shell service worker; the UI loads instantly and works offline, while metrics are always fetched live
 - **HEALTHCHECK** — built-in Docker healthcheck on `/`
 
 ---
@@ -267,7 +268,10 @@ FastAPI (uvicorn, port 8000, non-root, read-only rootfs)
 ├── app/
 │   ├── main.py              # FastAPI app — routes, stats, token validators
 │   ├── static/
-│   │   └── app.js           # Frontend logic (served as a self-hosted asset)
+│   │   ├── app.js           # Frontend logic (self-hosted asset)
+│   │   ├── sw.js            # Service worker (app-shell cache)
+│   │   ├── site.webmanifest # PWA manifest
+│   │   └── icon.svg, *.png  # App icon, favicons, maskable / PWA icons
 │   └── templates/
 │       └── index.html       # Single-page dashboard shell (HTML + inline CSS)
 ├── docker-compose.yml       # dboard + read-only socket-proxy
@@ -329,6 +333,24 @@ docker compose up -d --build
 # View logs
 docker compose logs -f
 ```
+
+---
+
+## Progressive Web App
+
+dboard is an installable PWA. In a supporting browser, use **Install app** /
+**Add to Home Screen** to run it in its own standalone window with the dboard
+icon.
+
+A service worker (`/sw.js`) caches the static app shell (HTML, CSS, JS, icons)
+with a stale-while-revalidate strategy, so the UI loads instantly and still
+renders when the server is unreachable. **`/api/*` requests always bypass the
+cache** — metrics are never served stale. Bump `CACHE` in `app/static/sw.js` on
+each release to evict the old shell.
+
+> Installation requires a secure context (HTTPS), which Caddy provides in
+> production. Over plain `http://<ip>` the browser disables service workers by
+> design.
 
 ---
 

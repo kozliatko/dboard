@@ -504,3 +504,11 @@
 
   refreshTokens();
   setInterval(refreshTokens, 30000);
+
+  // Register the service worker (app shell — installable, instant/offline UI).
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js')
+        .catch(err => console.warn('SW registration failed:', err));
+    });
+  }
