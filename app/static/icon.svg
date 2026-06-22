@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="dboard">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b1c30"/>
+      <stop offset="1" stop-color="#0c0d17"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#a78bfa"/>
+      <stop offset="1" stop-color="#6d28d9"/>
+    </linearGradient>
+    <linearGradient id="area" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c4b5fd" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#c4b5fd" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="10" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- board tile -->
+  <rect x="8" y="8" width="496" height="496" rx="116" fill="url(#tile)"/>
+  <rect x="8.75" y="8.75" width="494.5" height="494.5" rx="115.25" fill="none"
+        stroke="#2e2b60" stroke-width="1.5"/>
+  <rect x="8" y="8" width="496" height="248" rx="116" fill="#ffffff" opacity="0.025"/>
+
+  <!-- area fill under the trend line -->
+  <path d="M112 300 L208 232 L304 268 L400 176 L400 428 L112 428 Z" fill="url(#area)"/>
+
+  <!-- bars -->
+  <g fill="url(#bar)">
+    <rect x="84"  y="300" width="56" height="128" rx="18"/>
+    <rect x="180" y="232" width="56" height="196" rx="18"/>
+    <rect x="276" y="268" width="56" height="160" rx="18"/>
+    <rect x="372" y="176" width="56" height="252" rx="18"/>
+  </g>
+
+  <!-- trend line over the bar tops -->
+  <polyline points="112,300 208,232 304,268 400,176" fill="none"
+            stroke="#ede9fe" stroke-width="16"
+            stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- nodes -->
+  <g fill="#0c0d17" stroke="#ede9fe" stroke-width="9">
+    <circle cx="112" cy="300" r="14"/>
+    <circle cx="208" cy="232" r="14"/>
+    <circle cx="304" cy="268" r="14"/>
+  </g>
+  <!-- live peak node -->
+  <circle cx="400" cy="176" r="22" fill="#c4b5fd" filter="url(#glow)"/>
+  <circle cx="400" cy="176" r="9" fill="#ffffff"/>
+</svg>

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import mimetypes
 import os
 import sqlite3
 import threading
@@ -24,6 +25,9 @@ log = logging.getLogger("dboard")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Ensure the web manifest is served with the spec-recommended MIME type
+mimetypes.add_type("application/manifest+json", ".webmanifest")
 
 app = FastAPI()
 templates = Jinja2Templates(directory=os.path.join(_APP_DIR, "templates"))

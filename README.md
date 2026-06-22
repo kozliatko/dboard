@@ -1,4 +1,4 @@
-# dboard
+# <img src="app/static/icon-192.png" alt="" width="30" align="top"> dboard
 
 A lightweight, self-hosted Docker infrastructure dashboard.  
 Monitors containers, host system metrics, and API token validity — all in one place.
