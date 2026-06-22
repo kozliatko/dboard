@@ -318,6 +318,7 @@
   // ── Sort & filter ───────────────────────────────────────────────────────────
 
   const rawData = { proxied: [], others: [] };
+  let sampleInterval = 5;   // seconds between samples (from the API)
   const sortState = {
     proxied: { col: null, dir: 1 },
     others:  { col: null, dir: 1 },
@@ -457,32 +458,50 @@
   let _gid = 0;
   let activeDetail = null;
 
-  function areaChart(data, color, h) {
+  function fmtSpan(sec) {
+    sec = Math.round(sec);
+    if (sec >= 90) return '-' + Math.round(sec / 60) + 'm';
+    return '-' + sec + 's';
+  }
+
+  // Area/line chart with an X (time) axis. `series` = [{data, color}, ...];
+  // `interval` is the seconds between samples (for the axis labels).
+  function chart(series, interval, h) {
     const w = 320; h = h || 66;
-    if (!data || data.length < 2) {
-      return `<div class="mono" style="height:${h}px;display:flex;align-items:center;color:#374151;font-size:.7rem">no history yet</div>`;
+    const valid = series.filter(s => s.data && s.data.length >= 2);
+    if (!valid.length) {
+      return `<div class="mono" style="height:${h + 16}px;display:flex;align-items:center;color:#374151;font-size:.7rem">no history yet</div>`;
     }
-    // Scale to the data's own min–max with headroom, so a near-constant series
-    // sits centred as a line instead of filling the card to the top.
-    const lo = Math.min.apply(null, data), hi = Math.max.apply(null, data);
+    // Shared scale across all series: min–max with headroom so a near-constant
+    // series sits centred as a line instead of filling the card to the top.
+    const all = valid.reduce((a, s) => a.concat(s.data), []);
+    const lo = Math.min.apply(null, all), hi = Math.max.apply(null, all);
     const pad = (hi - lo) * 0.25 || Math.abs(hi) * 0.25 || 1;
     const ymin = lo - pad, span = (hi + pad) - ymin || 1;
-    const id = 'ovg' + (_gid++);
-    const pts = data.map((v, i) => {
-      const x = (i / (data.length - 1)) * w;
-      const y = h - ((v - ymin) / span) * (h * 0.82) - h * 0.09;
-      return [x, y];
+    const Y = v => (h - ((v - ymin) / span) * (h * 0.82) - h * 0.09).toFixed(1);
+    const X = (i, n) => ((i / (n - 1)) * w).toFixed(1);
+
+    let svg = `<svg width="100%" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="display:block;overflow:visible">`;
+    // X-axis baseline + a mid gridline
+    svg += `<line x1="0" y1="${h - 0.5}" x2="${w}" y2="${h - 0.5}" stroke="#ffffff" stroke-opacity="0.10" stroke-width="1" vector-effect="non-scaling-stroke"/>`;
+    svg += `<line x1="${(w / 2).toFixed(1)}" y1="0" x2="${(w / 2).toFixed(1)}" y2="${h}" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1" vector-effect="non-scaling-stroke"/>`;
+    valid.forEach(s => {
+      const n = s.data.length, id = 'ovg' + (_gid++);
+      const line = s.data.map((v, i) => X(i, n) + ',' + Y(v)).join(' ');
+      const area = 'M' + s.data.map((v, i) => X(i, n) + ' ' + Y(v)).join(' L ') + ` L ${w} ${h} L 0 ${h} Z`;
+      svg += `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">`
+        + `<stop offset="0" stop-color="${s.color}" stop-opacity="0.28"/>`
+        + `<stop offset="1" stop-color="${s.color}" stop-opacity="0"/></linearGradient></defs>`
+        + `<path d="${area}" fill="url(#${id})"/>`
+        + `<polyline points="${line}" fill="none" stroke="${s.color}" stroke-width="2" `
+        + `stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`;
     });
-    const line = pts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
-    const area = 'M' + pts.map(p => p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' L ')
-      + ` L ${w} ${h} L 0 ${h} Z`;
-    return `<svg width="100%" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="display:block;overflow:visible">`
-      + `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">`
-      + `<stop offset="0" stop-color="${color}" stop-opacity="0.30"/>`
-      + `<stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>`
-      + `<path d="${area}" fill="url(#${id})"/>`
-      + `<polyline points="${line}" fill="none" stroke="${color}" stroke-width="2" `
-      + `stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg>`;
+    svg += `</svg>`;
+
+    const maxN = Math.max.apply(null, valid.map(s => s.data.length));
+    const spanSec = (maxN - 1) * (interval || 5);
+    const axis = `<div class="ov-axis"><span>${fmtSpan(spanSec)}</span><span>${fmtSpan(spanSec / 2)}</span><span>now</span></div>`;
+    return `<div class="ov-chart-wrap">${svg}${axis}</div>`;
   }
 
   function findContainer(name) {
@@ -514,16 +533,29 @@
       ? `<div class="ov-chips">${c.domains.map(d => `<a href="https://${esc(d)}" target="_blank" class="chip">${esc(d)}</a>`).join('')}</div>`
       : '';
 
+    const iv = sampleInterval;
     const cpuCard = (c.cpu_percent != null)
       ? detailMetric('CPU', `<span style="color:${cpuColor}">${c.cpu_percent}<small>%</small></span>`,
-          areaChart(c.cpu_spark, cpuColor), thresholdClass(c.cpu_percent, 75, 90))
+          chart([{ data: c.cpu_spark, color: cpuColor }], iv), thresholdClass(c.cpu_percent, 75, 90))
       : detailMetric('CPU', '<span class="text-gray-600">—</span>', '');
     const memCard = (c.mem_mb != null)
-      ? detailMetric('Memory', memVal, areaChart(c.mem_spark, memColor), thresholdClass(c.mem_percent || 0, 80, 92))
+      ? detailMetric('Memory', memVal, chart([{ data: c.mem_spark, color: memColor }], iv), thresholdClass(c.mem_percent || 0, 80, 92))
       : detailMetric('Memory', '<span class="text-gray-600">—</span>', '');
+
+    const rxRate = c.net_rx_rate != null ? fmtBytes(c.net_rx_rate) + '/s' : '—';
+    const txRate = c.net_tx_rate != null ? fmtBytes(c.net_tx_rate) + '/s' : '—';
+    const netChart = chart([
+      { data: c.net_rx_spark, color: '#34d399' },
+      { data: c.net_tx_spark, color: '#60a5fa' },
+    ], iv);
     const netCard = `<div class="ov-metric span2">
-      <div class="ov-metric-label">Network I/O (total)</div>
-      <div class="ov-net"><span style="color:#34d399">↓ ${fmtBytes(c.net_rx)}</span><span style="color:#60a5fa">↑ ${fmtBytes(c.net_tx)}</span></div></div>`;
+      <div class="ov-metric-label" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Network I/O</span>
+        <span class="ov-legend"><span style="color:#34d399">● rx</span><span style="color:#60a5fa">● tx</span></span>
+      </div>
+      <div class="ov-net"><span style="color:#34d399">↓ ${rxRate}</span><span style="color:#60a5fa">↑ ${txRate}</span></div>
+      <div class="ov-chart">${netChart}</div>
+      <div class="ov-net-total mono">total ↓ ${fmtBytes(c.net_rx)} · ↑ ${fmtBytes(c.net_tx)}</div></div>`;
 
     const details = [
       ['Status', `<span style="color:${dot}">${esc(c.status)}</span>`],
@@ -586,6 +618,7 @@
 
     rawData.proxied = data.proxied || [];
     rawData.others  = data.others  || [];
+    if (data.sample_interval) sampleInterval = data.sample_interval;
 
     redraw('proxied');
     redraw('others');

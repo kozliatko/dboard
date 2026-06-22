@@ -9,8 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Container detail overlay: clicking a container row opens a Beszel-style modal
-  with larger live CPU and memory area charts, network I/O totals and metadata.
+  with larger live CPU, memory and network-rate area charts, network I/O totals
+  and metadata. Charts now have a time (X) axis with labels and a gridline.
   Updates live while open; closes on backdrop click, the × button or Escape.
+- Per-container network history: `container_metrics` gains `net_rx`/`net_tx`
+  columns (bytes/sec rates, like `sys_metrics`), with an automatic migration for
+  existing databases. Drives the network chart in the detail overlay.
 - Optional background metrics sampling (`SAMPLE_INTERVAL`, default 30s, set 0 to
   disable). When enabled, a task samples system + container metrics on a fixed
   cadence so history is recorded even with no dashboard open; the API endpoints

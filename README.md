@@ -27,7 +27,7 @@ Monitors containers, host system metrics, and API token validity — all in one 
 
 - **Three-tab UI** — Containers, System, Tokens
 - **Container tables** — sortable and filterable; shows status, health, uptime, CPU, RAM, network I/O with per-column sparklines
-- **Container detail overlay** — click any row for a larger view: live CPU & memory area charts, network totals, and metadata
+- **Container detail overlay** — click any row for a larger view: live CPU, memory and network-rate area charts with a time axis, plus metadata
 - **System panel** — live CPU, RAM, swap, disk, network I/O, disk I/O rates with SVG sparklines and visual thresholds (warn/crit)
 - **API token validation** — checks key validity without exposing the raw key value; shows service metadata (rate limits, model lists, account info)
 - **SQLite persistence** — sparkline history survives restarts; 24-hour retention; optional background sampling records history even when no dashboard is open

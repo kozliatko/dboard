@@ -298,6 +298,8 @@ _spark: dict[str, deque] = {
 
 _CONTAINER_SPARK_N = 20  # ~100 s at 5 s refresh interval
 _container_spark: dict[str, dict[str, deque]] = {}
+# Previous cumulative net counters per container, for computing bytes/sec rates.
+_container_io_prev: dict[str, dict] = {}
 
 # ── Persistence (SQLite) ──────────────────────────────────────────────────────
 
@@ -333,10 +335,18 @@ def _db_init() -> None:
                 ts   INTEGER NOT NULL,
                 name TEXT    NOT NULL,
                 cpu  REAL,
-                mem  REAL
+                mem  REAL,
+                net_rx INTEGER,
+                net_tx INTEGER
             );
             CREATE INDEX IF NOT EXISTS con_ts_name ON container_metrics(ts, name);
         """)
+        # Migration: add net columns to a container_metrics table created before
+        # they existed (net_rx/net_tx hold bytes/sec rates, like sys_metrics).
+        have = {r[1] for r in conn.execute("PRAGMA table_info(container_metrics)")}
+        for col in ("net_rx", "net_tx"):
+            if col not in have:
+                conn.execute(f"ALTER TABLE container_metrics ADD COLUMN {col} INTEGER")
         cutoff = int(time.time()) - _DB_RETENTION
         conn.execute("DELETE FROM sys_metrics WHERE ts < ?", (cutoff,))
         conn.execute("DELETE FROM container_metrics WHERE ts < ?", (cutoff,))
@@ -362,15 +372,17 @@ def _db_init() -> None:
         ).fetchall()]
         for name in names:
             c_rows = conn.execute(
-                "SELECT cpu,mem FROM container_metrics WHERE name=? ORDER BY ts DESC LIMIT ?",
+                "SELECT cpu,mem,net_rx,net_tx FROM container_metrics "
+                "WHERE name=? ORDER BY ts DESC LIMIT ?",
                 (name, _CONTAINER_SPARK_N)
             ).fetchall()
-            cpu_buf: deque = deque(maxlen=_CONTAINER_SPARK_N)
-            mem_buf: deque = deque(maxlen=_CONTAINER_SPARK_N)
-            for cv, mv in reversed(c_rows):
-                if cv is not None: cpu_buf.append(cv)
-                if mv is not None: mem_buf.append(mv)
-            _container_spark[name] = {"cpu": cpu_buf, "mem": mem_buf}
+            buf = {k: deque(maxlen=_CONTAINER_SPARK_N) for k in ("cpu", "mem", "net_rx", "net_tx")}
+            for cv, mv, rxv, txv in reversed(c_rows):
+                if cv  is not None: buf["cpu"].append(cv)
+                if mv  is not None: buf["mem"].append(mv)
+                if rxv is not None: buf["net_rx"].append(rxv)
+                if txv is not None: buf["net_tx"].append(txv)
+            _container_spark[name] = buf
 
     log.info("DB ready: %d sys rows, %d containers restored", len(rows), len(names))
 
@@ -404,11 +416,13 @@ def _db_write_sys(ts: int, cpu: float, mem: float, temp, net_rate, disk_rate) ->
 
 def _db_write_containers(entries: list[dict]) -> None:
     ts = int(time.time())
-    rows = [(ts, e["name"], e.get("cpu_percent"), e.get("mem_percent")) for e in entries]
+    rows = [(ts, e["name"], e.get("cpu_percent"), e.get("mem_percent"),
+             e.get("net_rx_rate"), e.get("net_tx_rate")) for e in entries]
     try:
         with _db_lock:
             _db().executemany(
-                "INSERT INTO container_metrics(ts,name,cpu,mem) VALUES(?,?,?,?)", rows
+                "INSERT INTO container_metrics(ts,name,cpu,mem,net_rx,net_tx) "
+                "VALUES(?,?,?,?,?,?)", rows
             )
             _db().commit()
     except Exception as e:
@@ -907,18 +921,32 @@ async def _collect_containers() -> dict:
         results = await asyncio.gather(
             *[loop.run_in_executor(executor, _stats_sync, p["_id"]) for p in all_running]
         )
+        now = time.monotonic()
         for p, stats in zip(all_running, results):
             p.update(stats)
             name = p["name"]
             if name not in _container_spark:
                 _container_spark[name] = {
-                    "cpu": deque(maxlen=_CONTAINER_SPARK_N),
-                    "mem": deque(maxlen=_CONTAINER_SPARK_N),
+                    k: deque(maxlen=_CONTAINER_SPARK_N)
+                    for k in ("cpu", "mem", "net_rx", "net_tx")
                 }
             if p.get("cpu_percent") is not None:
                 _container_spark[name]["cpu"].append(p["cpu_percent"])
             if p.get("mem_percent") is not None:
                 _container_spark[name]["mem"].append(p["mem_percent"])
+
+            # Network rate (bytes/sec) from the delta of cumulative counters.
+            if p.get("net_rx") is not None:
+                prev = _container_io_prev.get(name)
+                dt = now - prev["t"] if prev else 0
+                if prev and dt > 0:
+                    rx_rate = max(0, round((p["net_rx"] - prev["rx"]) / dt))
+                    tx_rate = max(0, round((p["net_tx"] - prev["tx"]) / dt))
+                    p["net_rx_rate"] = rx_rate
+                    p["net_tx_rate"] = tx_rate
+                    _container_spark[name]["net_rx"].append(rx_rate)
+                    _container_spark[name]["net_tx"].append(tx_rate)
+                _container_io_prev[name] = {"t": now, "rx": p["net_rx"], "tx": p["net_tx"]}
 
     # Persist container stats to DB (fire-and-forget)
     if all_running:
@@ -929,6 +957,8 @@ async def _collect_containers() -> dict:
         if name in _container_spark:
             p["cpu_spark"] = list(_container_spark[name]["cpu"])
             p["mem_spark"] = list(_container_spark[name]["mem"])
+            p["net_rx_spark"] = list(_container_spark[name]["net_rx"])
+            p["net_tx_spark"] = list(_container_spark[name]["net_tx"])
         p.pop("_id", None)
 
     proxied.sort(key=lambda x: (x["status"] != "running", x["name"].lower()))
@@ -939,5 +969,6 @@ async def _collect_containers() -> dict:
         "others": others,
         "running_proxied": sum(1 for p in proxied if p["status"] == "running"),
         "running_others": sum(1 for p in others if p["status"] == "running"),
+        "sample_interval": SAMPLE_INTERVAL or 5,
         "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
