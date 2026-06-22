@@ -340,6 +340,7 @@ def _db_init() -> None:
                 net_tx INTEGER
             );
             CREATE INDEX IF NOT EXISTS con_ts_name ON container_metrics(ts, name);
+            CREATE INDEX IF NOT EXISTS con_name_ts ON container_metrics(name, ts);
         """)
         # Migration: add net columns to a container_metrics table created before
         # they existed (net_rx/net_tx hold bytes/sec rates, like sys_metrics).
@@ -815,6 +816,34 @@ async def service_worker():
         media_type="application/javascript",
         headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"},
     )
+
+
+def _history_sync(name: str, rng: int) -> dict:
+    """Downsampled container history from SQLite for the last `rng` seconds."""
+    target_points = 160
+    bucket = max(1, rng // target_points)
+    frm = int(time.time()) - rng
+    with _db_lock:
+        rows = _db().execute(
+            "SELECT (ts/?)*?, avg(cpu), avg(mem), avg(net_rx), avg(net_tx) "
+            "FROM container_metrics WHERE name=? AND ts>=? GROUP BY ts/? ORDER BY ts/?",
+            (bucket, bucket, name, frm, bucket, bucket)
+        ).fetchall()
+    cpu, mem, nrx, ntx = [], [], [], []
+    for _b, c, m, rx, tx in rows:
+        cpu.append(round(c, 1) if c is not None else None)
+        mem.append(round(m, 1) if m is not None else None)
+        nrx.append(round(rx) if rx is not None else None)
+        ntx.append(round(tx) if tx is not None else None)
+    return {"name": name, "range": rng, "interval": bucket,
+            "cpu": cpu, "mem": mem, "net_rx": nrx, "net_tx": ntx}
+
+
+@app.get("/api/history")
+async def api_history(name: str, range: int = 3600):
+    rng = max(60, min(int(range), _DB_RETENTION))
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(executor, _history_sync, name, rng)
 
 
 @app.get("/api/system")

@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Selectable time range in the container detail overlay: **live / 1h / 6h / 24h**.
+  The live view uses the in-memory ring buffer (~10 min, auto-updating); longer
+  ranges are served by a new `GET /api/history` endpoint that reads and
+  downsamples `container_metrics` from SQLite (up to the 24h retention). Each
+  chart's X axis reflects the actual data extent.
 - Container detail overlay: clicking a container row opens a Beszel-style modal
   with larger live CPU, memory and network-rate area charts, network I/O totals
   and metadata. Charts now have a time (X) axis with labels and a gridline.

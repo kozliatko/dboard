@@ -457,6 +457,8 @@
   // ── Container detail overlay ────────────────────────────────────────────────
   let _gid = 0;
   let activeDetail = null;
+  let detailRange = 'live';   // 'live' (ring buffer) | seconds (DB history)
+  let lastHistLoad = 0;
 
   function fmtSpan(sec) {
     sec = Math.round(sec);
@@ -468,7 +470,9 @@
   // `interval` is the seconds between samples (for the axis labels).
   function chart(series, interval, h) {
     const w = 320; h = h || 66;
-    const valid = series.filter(s => s.data && s.data.length >= 2);
+    const valid = series
+      .map(s => ({ data: (s.data || []).filter(v => typeof v === 'number'), color: s.color }))
+      .filter(s => s.data.length >= 2);
     if (!valid.length) {
       return `<div class="mono" style="height:${h + 16}px;display:flex;align-items:center;color:#374151;font-size:.7rem">no history yet</div>`;
     }
@@ -515,7 +519,9 @@
       <div class="ov-chart">${chart}</div></div>`;
   }
 
-  function renderDetail(c) {
+  // `s` holds the chart series for the selected range:
+  // { cpu, mem, net_rx, net_tx, interval }
+  function renderDetail(c, s) {
     const statusCls = STATUSES.includes(c.status) ? c.status : 'dead';
     const dot = { running:'#4ade80', exited:'#f87171', paused:'#fbbf24', restarting:'#60a5fa', dead:'#6b7280' }[statusCls];
     const cpuColor = barColor(c.cpu_percent || 0), memColor = barColor(c.mem_percent || 0);
@@ -533,20 +539,20 @@
       ? `<div class="ov-chips">${c.domains.map(d => `<a href="https://${esc(d)}" target="_blank" class="chip">${esc(d)}</a>`).join('')}</div>`
       : '';
 
-    const iv = sampleInterval;
+    const iv = s.interval || sampleInterval;
     const cpuCard = (c.cpu_percent != null)
       ? detailMetric('CPU', `<span style="color:${cpuColor}">${c.cpu_percent}<small>%</small></span>`,
-          chart([{ data: c.cpu_spark, color: cpuColor }], iv), thresholdClass(c.cpu_percent, 75, 90))
+          chart([{ data: s.cpu, color: cpuColor }], iv), thresholdClass(c.cpu_percent, 75, 90))
       : detailMetric('CPU', '<span class="text-gray-600">—</span>', '');
     const memCard = (c.mem_mb != null)
-      ? detailMetric('Memory', memVal, chart([{ data: c.mem_spark, color: memColor }], iv), thresholdClass(c.mem_percent || 0, 80, 92))
+      ? detailMetric('Memory', memVal, chart([{ data: s.mem, color: memColor }], iv), thresholdClass(c.mem_percent || 0, 80, 92))
       : detailMetric('Memory', '<span class="text-gray-600">—</span>', '');
 
     const rxRate = c.net_rx_rate != null ? fmtBytes(c.net_rx_rate) + '/s' : '—';
     const txRate = c.net_tx_rate != null ? fmtBytes(c.net_tx_rate) + '/s' : '—';
     const netChart = chart([
-      { data: c.net_rx_spark, color: '#34d399' },
-      { data: c.net_tx_spark, color: '#60a5fa' },
+      { data: s.net_rx, color: '#34d399' },
+      { data: s.net_tx, color: '#60a5fa' },
     ], iv);
     const netCard = `<div class="ov-metric span2">
       <div class="ov-metric-label" style="display:flex;justify-content:space-between;align-items:center">
@@ -566,20 +572,60 @@
     const detailsHtml = `<div class="ov-details">${details.map(d =>
       `<div><div class="ov-detail-k">${d[0]}</div><div class="ov-detail-v">${d[1]}</div></div>`).join('')}</div>`;
 
+    const ranges = [['live', 'live'], ['3600', '1h'], ['21600', '6h'], ['86400', '24h']];
+    const rangeSel = `<div class="ov-ranges">${ranges.map(([v, l]) =>
+      `<button class="ov-range-btn ${String(detailRange) === v ? 'active' : ''}" data-range="${v}">${l}</button>`).join('')}</div>`;
+
     return `<div class="ov-head"><div>
         <div class="ov-title"><span class="ov-dot" style="background:${dot};box-shadow:0 0 8px ${dot}99"></span><h2>${esc(c.name)}</h2></div>
         <div class="ov-sub">${sub}</div>${chips}
       </div>
       <button class="ov-close" aria-label="Close">×</button></div>
+      ${rangeSel}
       <div class="ov-metrics">${cpuCard}${memCard}${netCard}</div>
       ${detailsHtml}`;
+  }
+
+  // Live series straight from the in-memory ring buffers (~10 min, auto-updating).
+  function liveSeries(c) {
+    return {
+      cpu: c.cpu_spark, mem: c.mem_spark,
+      net_rx: c.net_rx_spark, net_tx: c.net_tx_spark,
+      interval: sampleInterval,
+    };
+  }
+
+  function renderInto(c, s) { $('detail-panel').innerHTML = renderDetail(c, s); }
+
+  // Fetch a longer range from SQLite (downsampled) and render it.
+  async function loadHistory() {
+    const c = findContainer(activeDetail);
+    if (!c) return;
+    try {
+      const h = await xhrJson(`/api/history?name=${encodeURIComponent(activeDetail)}&range=${detailRange}`);
+      if (activeDetail === h.name) {
+        renderInto(c, { cpu: h.cpu, mem: h.mem, net_rx: h.net_rx, net_tx: h.net_tx, interval: h.interval });
+        lastHistLoad = Date.now();
+      }
+    } catch (e) { /* keep last render */ }
+  }
+
+  function setRange(r) {
+    detailRange = r;
+    if (r === 'live') {
+      const c = findContainer(activeDetail);
+      if (c) renderInto(c, liveSeries(c));
+    } else {
+      loadHistory();
+    }
   }
 
   function openDetail(name) {
     const c = findContainer(name);
     if (!c) return;
     activeDetail = name;
-    $('detail-panel').innerHTML = renderDetail(c);
+    detailRange = 'live';
+    renderInto(c, liveSeries(c));
     const ov = $('detail-overlay');
     ov.classList.add('open');
     ov.setAttribute('aria-hidden', 'false');
@@ -588,7 +634,12 @@
   function updateDetail() {
     if (!activeDetail) return;
     const c = findContainer(activeDetail);
-    if (c) $('detail-panel').innerHTML = renderDetail(c);
+    if (!c) return;
+    if (detailRange === 'live') {
+      renderInto(c, liveSeries(c));            // live ring-buffer, refresh each tick
+    } else if (Date.now() - lastHistLoad > 15000) {
+      loadHistory();                           // refresh longer ranges periodically
+    }
   }
 
   function closeDetail() {
@@ -658,7 +709,9 @@
   // Close on backdrop click or the × button.
   const _ov = document.getElementById('detail-overlay');
   if (_ov) _ov.addEventListener('click', (e) => {
-    if (e.target === _ov || e.target.closest('.ov-close')) closeDetail();
+    if (e.target === _ov || e.target.closest('.ov-close')) { closeDetail(); return; }
+    const rb = e.target.closest('.ov-range-btn');
+    if (rb) setRange(rb.dataset.range === 'live' ? 'live' : parseInt(rb.dataset.range, 10));
   });
   // Close on Escape.
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDetail(); });

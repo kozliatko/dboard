@@ -448,6 +448,16 @@
     .ov-close:hover { color:#fff; border-color:#3a3b5a; background:#16172a; }
     .ov-chips { display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.7rem; }
 
+    .ov-ranges { display:inline-flex; gap:2px; margin-top:1.2rem; padding:3px;
+      background:#0c0d17; border:1px solid #1c1d30; border-radius:.6rem; }
+    .ov-range-btn {
+      font-family:'JetBrains Mono',monospace; font-size:.66rem; color:#9aa1b2;
+      padding:.28rem .7rem; border:0; border-radius:.42rem; background:transparent;
+      cursor:pointer; transition:all .14s;
+    }
+    .ov-range-btn:hover { color:#e5e7eb; background:#16172a; }
+    .ov-range-btn.active { color:#0c0d17; background:#a78bfa; font-weight:500; }
+
     .ov-metrics { display:grid; grid-template-columns:1fr 1fr; gap:.8rem; margin-top:1.35rem; }
     .ov-metric {
       background:#0c0d17; border:1px solid #1c1d30; border-radius:.85rem;
