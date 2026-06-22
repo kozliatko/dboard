@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Documentation: how the disk-probe mechanism works and a step-by-step guide for
+  monitoring additional separate disks.
+
 ## [0.2.0] - 2026-06-22
 
 Security hardening release. **Contains breaking deployment changes — see

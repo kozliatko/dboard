@@ -98,8 +98,63 @@ narrow, non-sensitive directories are exposed for disk stats.
 | `dboard_data:/app/data` | `dboard` | SQLite history (writable, owned by the non-root app user) |
 
 Create the probe directory once on the host: `sudo mkdir -p /opt/dboard/diskprobe`.
-To monitor additional filesystems, add a read-only mount + a matching entry in
-`_DISK_PROBES` in `app/main.py`.
+
+### Disk monitoring
+
+#### How it works
+
+`statvfs()` returns usage for the **whole filesystem** a path lives on, not for
+the directory itself. dboard exploits this: instead of mounting a sensitive tree
+to read its usage, it mounts an **empty directory that merely sits on the target
+filesystem**. The numbers are identical to `df`, but no files are exposed.
+
+```
+host:  /opt/dboard/diskprobe   (empty, but located on the "/" filesystem)
+                 │  bind mount, read-only
+                 ▼
+container:  /host/root         statvfs() → usage of the entire "/" filesystem
+```
+
+`/boot` is mounted directly (it holds only kernel images — nothing sensitive),
+while `/` is read through an empty probe dir so the host root is never exposed.
+
+#### Monitoring an additional separate disk
+
+Say the host has a separate data disk mounted at `/mnt/data`. To add it:
+
+1. **Pick what to mount.** If the mountpoint itself is non-sensitive, mount it
+   directly. Otherwise create an empty probe dir **on that filesystem**:
+
+   ```bash
+   sudo mkdir -p /mnt/data/.dboard-probe
+   ```
+
+2. **Add a read-only mount** under the `dboard` service in `docker-compose.yml`:
+
+   ```yaml
+       volumes:
+         # ... existing mounts ...
+         - /mnt/data/.dboard-probe:/host/data:ro   # empty probe → /mnt/data usage
+         # or, if the mountpoint is safe to expose:
+         # - /mnt/data:/host/data:ro
+   ```
+
+3. **Register the probe** in `_DISK_PROBES` in `app/main.py` — `(path inside the
+   container, label to display)`:
+
+   ```python
+   _DISK_PROBES = [
+       ("/host/root", "/"),
+       ("/host/boot", "/boot"),
+       ("/host/data", "/mnt/data"),   # ← added
+   ]
+   ```
+
+4. **Recreate the container:** `docker compose up -d`.
+
+The new filesystem appears as its own card in the System tab. Each filesystem is
+de-duplicated by device ID, so probing two paths on the same disk reports it
+once.
 
 ---
 
