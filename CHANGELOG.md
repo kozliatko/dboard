@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Container detail overlay: clicking a container row opens a Beszel-style modal
+  with larger live CPU and memory area charts, network I/O totals and metadata.
+  Updates live while open; closes on backdrop click, the × button or Escape.
 - Optional background metrics sampling (`SAMPLE_INTERVAL`, default 30s, set 0 to
   disable). When enabled, a task samples system + container metrics on a fixed
   cadence so history is recorded even with no dashboard open; the API endpoints

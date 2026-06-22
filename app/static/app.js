@@ -94,7 +94,7 @@
       const chips = (c.domains||[])
         .map(d => `<a href="https://${esc(d)}" target="_blank" class="chip">${esc(d)}</a>`)
         .join('') || '<span class="text-gray-700 text-xs mono">—</span>';
-      return `<tr class="${rowLevel(c)}">
+      return `<tr class="${rowLevel(c)} row-click" data-cname="${esc(c.name)}">
         <td>${badge(c.status)}</td>
         <td><span class="font-semibold text-white text-sm">${esc(c.name)}</span></td>
         <td style="max-width:260px">${chips}</td>
@@ -110,7 +110,7 @@
 
   function renderOthers(rows) {
     if (!rows.length) return '<tr class="empty-row"><td colspan="8">No matching containers</td></tr>';
-    return rows.map(c => `<tr class="${rowLevel(c)}">
+    return rows.map(c => `<tr class="${rowLevel(c)} row-click" data-cname="${esc(c.name)}">
       <td>${badge(c.status)}</td>
       <td><span class="font-semibold text-white text-sm">${esc(c.name)}</span></td>
       <td class="mono text-xs text-gray-500" style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${esc(c.image)}">${esc(c.image)}</td>
@@ -453,6 +453,119 @@
   }
   function hideError() { $('error-banner').style.display = 'none'; }
 
+  // ── Container detail overlay ────────────────────────────────────────────────
+  let _gid = 0;
+  let activeDetail = null;
+
+  function areaChart(data, color, h) {
+    const w = 320; h = h || 66;
+    if (!data || data.length < 2) {
+      return `<div class="mono" style="height:${h}px;display:flex;align-items:center;color:#374151;font-size:.7rem">no history yet</div>`;
+    }
+    // Scale to the data's own min–max with headroom, so a near-constant series
+    // sits centred as a line instead of filling the card to the top.
+    const lo = Math.min.apply(null, data), hi = Math.max.apply(null, data);
+    const pad = (hi - lo) * 0.25 || Math.abs(hi) * 0.25 || 1;
+    const ymin = lo - pad, span = (hi + pad) - ymin || 1;
+    const id = 'ovg' + (_gid++);
+    const pts = data.map((v, i) => {
+      const x = (i / (data.length - 1)) * w;
+      const y = h - ((v - ymin) / span) * (h * 0.82) - h * 0.09;
+      return [x, y];
+    });
+    const line = pts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+    const area = 'M' + pts.map(p => p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' L ')
+      + ` L ${w} ${h} L 0 ${h} Z`;
+    return `<svg width="100%" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="display:block;overflow:visible">`
+      + `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">`
+      + `<stop offset="0" stop-color="${color}" stop-opacity="0.30"/>`
+      + `<stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>`
+      + `<path d="${area}" fill="url(#${id})"/>`
+      + `<polyline points="${line}" fill="none" stroke="${color}" stroke-width="2" `
+      + `stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg>`;
+  }
+
+  function findContainer(name) {
+    return rawData.proxied.concat(rawData.others).find(c => c.name === name) || null;
+  }
+
+  function detailMetric(label, valHtml, chart, cls) {
+    return `<div class="ov-metric ${cls || ''}">
+      <div class="ov-metric-label">${label}</div>
+      <div class="ov-metric-val">${valHtml}</div>
+      <div class="ov-chart">${chart}</div></div>`;
+  }
+
+  function renderDetail(c) {
+    const statusCls = STATUSES.includes(c.status) ? c.status : 'dead';
+    const dot = { running:'#4ade80', exited:'#f87171', paused:'#fbbf24', restarting:'#60a5fa', dead:'#6b7280' }[statusCls];
+    const cpuColor = barColor(c.cpu_percent || 0), memColor = barColor(c.mem_percent || 0);
+
+    const memVal = (c.mem_limit_mb > 0 && c.mem_limit_mb < 999999)
+      ? `<span style="color:${memColor}">${c.mem_mb}<small> / ${c.mem_limit_mb} MB · ${c.mem_percent ?? '–'}%</small></span>`
+      : `<span style="color:${memColor}">${c.mem_mb ?? '—'}<small> MB</small></span>`;
+
+    const sub = [esc(c.image || ''), c.uptime ? '↑' + esc(c.uptime) : null]
+      .filter(Boolean)
+      .map(s => `<span>${s}</span>`)
+      .join('<span style="color:#374151">·</span>');
+
+    const chips = (c.domains || []).length
+      ? `<div class="ov-chips">${c.domains.map(d => `<a href="https://${esc(d)}" target="_blank" class="chip">${esc(d)}</a>`).join('')}</div>`
+      : '';
+
+    const cpuCard = (c.cpu_percent != null)
+      ? detailMetric('CPU', `<span style="color:${cpuColor}">${c.cpu_percent}<small>%</small></span>`,
+          areaChart(c.cpu_spark, cpuColor), thresholdClass(c.cpu_percent, 75, 90))
+      : detailMetric('CPU', '<span class="text-gray-600">—</span>', '');
+    const memCard = (c.mem_mb != null)
+      ? detailMetric('Memory', memVal, areaChart(c.mem_spark, memColor), thresholdClass(c.mem_percent || 0, 80, 92))
+      : detailMetric('Memory', '<span class="text-gray-600">—</span>', '');
+    const netCard = `<div class="ov-metric span2">
+      <div class="ov-metric-label">Network I/O (total)</div>
+      <div class="ov-net"><span style="color:#34d399">↓ ${fmtBytes(c.net_rx)}</span><span style="color:#60a5fa">↑ ${fmtBytes(c.net_tx)}</span></div></div>`;
+
+    const details = [
+      ['Status', `<span style="color:${dot}">${esc(c.status)}</span>`],
+      ['Health', c.health ? esc(c.health) : '—'],
+      ['Uptime', c.uptime ? '↑' + esc(c.uptime) : '—'],
+      ['Image', esc(c.image || '—')],
+    ];
+    const detailsHtml = `<div class="ov-details">${details.map(d =>
+      `<div><div class="ov-detail-k">${d[0]}</div><div class="ov-detail-v">${d[1]}</div></div>`).join('')}</div>`;
+
+    return `<div class="ov-head"><div>
+        <div class="ov-title"><span class="ov-dot" style="background:${dot};box-shadow:0 0 8px ${dot}99"></span><h2>${esc(c.name)}</h2></div>
+        <div class="ov-sub">${sub}</div>${chips}
+      </div>
+      <button class="ov-close" aria-label="Close">×</button></div>
+      <div class="ov-metrics">${cpuCard}${memCard}${netCard}</div>
+      ${detailsHtml}`;
+  }
+
+  function openDetail(name) {
+    const c = findContainer(name);
+    if (!c) return;
+    activeDetail = name;
+    $('detail-panel').innerHTML = renderDetail(c);
+    const ov = $('detail-overlay');
+    ov.classList.add('open');
+    ov.setAttribute('aria-hidden', 'false');
+  }
+
+  function updateDetail() {
+    if (!activeDetail) return;
+    const c = findContainer(activeDetail);
+    if (c) $('detail-panel').innerHTML = renderDetail(c);
+  }
+
+  function closeDetail() {
+    activeDetail = null;
+    const ov = $('detail-overlay');
+    ov.classList.remove('open');
+    ov.setAttribute('aria-hidden', 'true');
+  }
+
   async function refresh() {
     let data, sys;
     try {
@@ -476,6 +589,7 @@
 
     redraw('proxied');
     redraw('others');
+    updateDetail();   // keep the open overlay live
 
     $('lbl-proxied').textContent = `${data.running_proxied} running / ${rawData.proxied.length} total`;
     $('lbl-others').textContent  = `${data.running_others} running / ${rawData.others.length} total`;
@@ -498,6 +612,23 @@
   });
   const _refreshBtn = document.getElementById('tok-refresh-btn');
   if (_refreshBtn) _refreshBtn.addEventListener('click', () => refreshTokens(true));
+
+  // Open the detail overlay on row click (ignore clicks on domain links).
+  ['proxied', 'others'].forEach(t => {
+    const body = document.getElementById(t + '-body');
+    if (body) body.addEventListener('click', (e) => {
+      if (e.target.closest('a')) return;
+      const tr = e.target.closest('tr[data-cname]');
+      if (tr) openDetail(tr.dataset.cname);
+    });
+  });
+  // Close on backdrop click or the × button.
+  const _ov = document.getElementById('detail-overlay');
+  if (_ov) _ov.addEventListener('click', (e) => {
+    if (e.target === _ov || e.target.closest('.ov-close')) closeDetail();
+  });
+  // Close on Escape.
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDetail(); });
 
   refresh();
   setInterval(refresh, 5000);

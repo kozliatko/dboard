@@ -408,6 +408,77 @@
     ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #2e2e50; border-radius: 3px; }
+
+    /* ── Container detail overlay ─────────────────────────────────────────── */
+    .row-click { cursor: pointer; }
+    .overlay {
+      position: fixed; inset: 0; z-index: 50;
+      display: flex; align-items: center; justify-content: center;
+      padding: 1.5rem;
+      background: rgba(6,7,14,.72);
+      backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px);
+      opacity: 0; pointer-events: none;
+      transition: opacity .18s ease;
+    }
+    .overlay.open { opacity: 1; pointer-events: auto; }
+    .overlay-panel {
+      width: 100%; max-width: 720px; max-height: 88vh; overflow-y: auto;
+      background: linear-gradient(180deg,#15162a,#0c0d17);
+      border: 1px solid #2a2b45; border-radius: 1.1rem;
+      box-shadow: 0 30px 80px -20px rgba(0,0,0,.85), 0 0 0 1px rgba(167,139,250,.05);
+      padding: 1.5rem 1.6rem 1.7rem;
+      transform: translateY(12px) scale(.985);
+      transition: transform .2s cubic-bezier(.2,.8,.2,1);
+    }
+    .overlay.open .overlay-panel { transform: none; }
+
+    .ov-head { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; }
+    .ov-title { display:flex; align-items:center; gap:.6rem; }
+    .ov-title h2 { font-size:1.3rem; font-weight:700; color:#fff; letter-spacing:-.01em; }
+    .ov-dot { width:.6rem; height:.6rem; border-radius:50%; flex-shrink:0; }
+    .ov-sub {
+      font-family:'JetBrains Mono',monospace; font-size:.72rem; color:#6b7280;
+      margin-top:.45rem; display:flex; flex-wrap:wrap; gap:.35rem .5rem; align-items:center;
+    }
+    .ov-close {
+      flex-shrink:0; width:2rem; height:2rem; border-radius:.6rem;
+      border:1px solid #23243a; background:#0d0e1a; color:#9ca3af;
+      font-size:1.15rem; line-height:1; cursor:pointer; transition:all .15s;
+    }
+    .ov-close:hover { color:#fff; border-color:#3a3b5a; background:#16172a; }
+    .ov-chips { display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.7rem; }
+
+    .ov-metrics { display:grid; grid-template-columns:1fr 1fr; gap:.8rem; margin-top:1.35rem; }
+    .ov-metric {
+      background:#0c0d17; border:1px solid #1c1d30; border-radius:.85rem;
+      padding:.85rem .95rem .75rem;
+    }
+    .ov-metric.span2 { grid-column:1 / -1; }
+    .ov-metric.warn { border-color:#92400e; }
+    .ov-metric.crit { border-color:#7f1d1d; }
+    .ov-metric-label {
+      font-family:'JetBrains Mono',monospace; font-size:.6rem; text-transform:uppercase;
+      letter-spacing:.09em; color:#6b7280;
+    }
+    .ov-metric-val {
+      font-family:'JetBrains Mono',monospace; font-size:1.55rem; font-weight:600;
+      margin-top:.15rem; line-height:1.1; color:#e5e7eb;
+    }
+    .ov-metric-val small { font-size:.78rem; color:#6b7280; font-weight:400; }
+    .ov-chart { margin-top:.55rem; }
+    .ov-net { display:flex; gap:1.6rem; font-family:'JetBrains Mono',monospace; font-size:1.1rem; margin-top:.2rem; }
+
+    .ov-details { margin-top:1.25rem; display:grid; grid-template-columns:repeat(2,1fr); gap:.6rem .9rem; }
+    .ov-detail-k {
+      font-family:'JetBrains Mono',monospace; font-size:.6rem; text-transform:uppercase;
+      letter-spacing:.06em; color:#4b5563;
+    }
+    .ov-detail-v { font-family:'JetBrains Mono',monospace; font-size:.78rem; color:#cbd5e1; word-break:break-all; margin-top:.1rem; }
+
+    @media (max-width:560px) {
+      .ov-metrics { grid-template-columns:1fr; }
+      .ov-details { grid-template-columns:1fr; }
+    }
   </style>
 </head>
 <body class="text-gray-300">
@@ -524,6 +595,11 @@
     <div id="tok-grid" class="tok-grid"></div>
   </div>
 
+</div>
+
+<!-- Container detail overlay -->
+<div id="detail-overlay" class="overlay" aria-hidden="true">
+  <div class="overlay-panel" id="detail-panel" role="dialog" aria-modal="true"></div>
 </div>
 
 <script src="/static/app.js" defer></script>
