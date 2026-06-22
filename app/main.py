@@ -337,17 +337,19 @@ def _db_init() -> None:
                 cpu  REAL,
                 mem  REAL,
                 net_rx INTEGER,
-                net_tx INTEGER
+                net_tx INTEGER,
+                mem_mb REAL
             );
             CREATE INDEX IF NOT EXISTS con_ts_name ON container_metrics(ts, name);
             CREATE INDEX IF NOT EXISTS con_name_ts ON container_metrics(name, ts);
         """)
-        # Migration: add net columns to a container_metrics table created before
-        # they existed (net_rx/net_tx hold bytes/sec rates, like sys_metrics).
+        # Migration: add columns to a container_metrics table created before they
+        # existed (net_rx/net_tx = bytes/sec rates; mem_mb = absolute MB, summable
+        # across containers for the stacked chart, unlike the per-limit mem %).
         have = {r[1] for r in conn.execute("PRAGMA table_info(container_metrics)")}
-        for col in ("net_rx", "net_tx"):
+        for col, typ in (("net_rx", "INTEGER"), ("net_tx", "INTEGER"), ("mem_mb", "REAL")):
             if col not in have:
-                conn.execute(f"ALTER TABLE container_metrics ADD COLUMN {col} INTEGER")
+                conn.execute(f"ALTER TABLE container_metrics ADD COLUMN {col} {typ}")
         cutoff = int(time.time()) - _DB_RETENTION
         conn.execute("DELETE FROM sys_metrics WHERE ts < ?", (cutoff,))
         conn.execute("DELETE FROM container_metrics WHERE ts < ?", (cutoff,))
@@ -418,12 +420,12 @@ def _db_write_sys(ts: int, cpu: float, mem: float, temp, net_rate, disk_rate) ->
 def _db_write_containers(entries: list[dict]) -> None:
     ts = int(time.time())
     rows = [(ts, e["name"], e.get("cpu_percent"), e.get("mem_percent"),
-             e.get("net_rx_rate"), e.get("net_tx_rate")) for e in entries]
+             e.get("net_rx_rate"), e.get("net_tx_rate"), e.get("mem_mb")) for e in entries]
     try:
         with _db_lock:
             _db().executemany(
-                "INSERT INTO container_metrics(ts,name,cpu,mem,net_rx,net_tx) "
-                "VALUES(?,?,?,?,?,?)", rows
+                "INSERT INTO container_metrics(ts,name,cpu,mem,net_rx,net_tx,mem_mb) "
+                "VALUES(?,?,?,?,?,?,?)", rows
             )
             _db().commit()
     except Exception as e:
@@ -872,6 +874,50 @@ async def api_system_history(range: int = 3600):
     rng = max(60, min(int(range), _DB_RETENTION))
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(executor, _system_history_sync, rng)
+
+
+_STACK_TOP = 8  # keep the largest N containers; fold the rest into "other"
+_STACK_EXPR = {"cpu": "avg(cpu)", "mem": "avg(mem_mb)", "net": "avg(net_rx)+avg(net_tx)"}
+
+
+def _stack_sync(metric: str, rng: int) -> dict:
+    """Per-container series aligned to common time buckets, for a stacked chart."""
+    if metric not in _STACK_EXPR:
+        metric = "cpu"
+    bucket = max(1, rng // 120)
+    frm = int(time.time()) - rng
+    with _db_lock:
+        rows = _db().execute(
+            f"SELECT ts/?, name, {_STACK_EXPR[metric]} FROM container_metrics "
+            "WHERE ts>=? GROUP BY ts/?, name ORDER BY ts/?",
+            (bucket, frm, bucket, bucket)
+        ).fetchall()
+
+    buckets = sorted({r[0] for r in rows})
+    bidx = {b: i for i, b in enumerate(buckets)}
+    data: dict[str, list] = {}
+    for b, name, val in rows:
+        data.setdefault(name, [0.0] * len(buckets))[bidx[b]] = round(val or 0, 2)
+
+    totals = {n: sum(v) for n, v in data.items()}
+    names = sorted(data, key=lambda n: totals[n], reverse=True)
+    out = [{"name": n, "data": data[n]} for n in names[:_STACK_TOP]]
+    if len(names) > _STACK_TOP:
+        other = [0.0] * len(buckets)
+        for n in names[_STACK_TOP:]:
+            for i, v in enumerate(data[n]):
+                other[i] += v
+        out.append({"name": "other", "data": [round(x, 2) for x in other]})
+
+    return {"metric": metric, "range": rng, "interval": bucket,
+            "count": len(buckets), "containers": out}
+
+
+@app.get("/api/stack")
+async def api_stack(metric: str = "cpu", range: int = 3600):
+    rng = max(60, min(int(range), _DB_RETENTION))
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(executor, _stack_sync, metric, rng)
 
 
 @app.get("/api/system")

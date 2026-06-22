@@ -754,6 +754,62 @@
     ov.setAttribute('aria-hidden', 'true');
   }
 
+  // ── Global stacked resource chart ───────────────────────────────────────────
+  const STACK_COLORS = ['#a78bfa', '#60a5fa', '#34d399', '#fbbf24', '#f472b6', '#22d3ee', '#fb923c', '#a3e635'];
+  let stackMetric = 'cpu';
+  let stackRange = 3600;
+  let lastStackLoad = 0;
+
+  function stackColor(c, ci) { return c.name === 'other' ? '#64748b' : STACK_COLORS[ci % STACK_COLORS.length]; }
+
+  function renderStack(resp) {
+    const conts = resp.containers || [];
+    const n = resp.count || 0;
+    const chartEl = $('stack-chart'), legEl = $('stack-legend'), totEl = $('stack-total');
+    if (!conts.length || n < 2) {
+      chartEl.innerHTML = `<div class="mono" style="height:170px;display:flex;align-items:center;justify-content:center;color:#374151;font-size:.75rem">no history yet</div>`;
+      legEl.innerHTML = ''; totEl.textContent = '';
+      return;
+    }
+    const fmtVal = resp.metric === 'cpu' ? (v => v.toFixed(0) + '%')
+      : resp.metric === 'mem' ? (v => fmtMb(v)) : (v => fmtBytes(v) + '/s');
+
+    const w = 600, h = 170;
+    const totals = [];
+    for (let i = 0; i < n; i++) { let s = 0; for (const c of conts) s += (c.data[i] || 0); totals.push(s); }
+    const max = Math.max.apply(null, totals.concat(0.001));
+    const X = i => ((i / (n - 1)) * w).toFixed(1);
+    const Y = v => (h - (v / max) * h * 0.94 - h * 0.03).toFixed(1);
+
+    let cum = new Array(n).fill(0);
+    let svg = `<svg width="100%" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="display:block;overflow:visible">`;
+    svg += `<line x1="0" y1="${h - 0.5}" x2="${w}" y2="${h - 0.5}" stroke="#ffffff" stroke-opacity="0.10" vector-effect="non-scaling-stroke"/>`;
+    conts.forEach((c, ci) => {
+      const color = stackColor(c, ci);
+      const upper = cum.map((v, i) => v + (c.data[i] || 0));
+      const top = upper.map((v, i) => `${X(i)} ${Y(v)}`).join(' L ');
+      const bot = cum.map((v, i) => `${X(i)} ${Y(v)}`).reverse().join(' L ');
+      svg += `<path d="M ${top} L ${bot} Z" fill="${color}" fill-opacity="0.82" stroke="${color}" stroke-width="0.6" stroke-opacity="0.5" vector-effect="non-scaling-stroke"/>`;
+      cum = upper;
+    });
+    svg += `</svg>`;
+    const spanSec = (n - 1) * (resp.interval || 30);
+    svg += `<div class="stack-axis"><span>${fmtSpan(spanSec)}</span><span>${fmtSpan(spanSec / 2)}</span><span>now</span></div>`;
+    chartEl.innerHTML = svg;
+
+    legEl.innerHTML = conts.map((c, ci) =>
+      `<span class="stack-leg-item"><span class="stack-leg-dot" style="background:${stackColor(c, ci)}"></span>${esc(c.name)} <span style="color:#6b7280">${fmtVal(c.data[n - 1] || 0)}</span></span>`).join('');
+    totEl.textContent = '· total ' + fmtVal(totals[n - 1]);
+  }
+
+  async function loadStack() {
+    try {
+      const r = await xhrJson(`/api/stack?metric=${stackMetric}&range=${stackRange}`);
+      renderStack(r);
+      lastStackLoad = Date.now();
+    } catch (e) { /* keep last render */ }
+  }
+
   async function refresh() {
     let data, sys;
     try {
@@ -815,6 +871,19 @@
   const _sysGrid = document.getElementById('sys-grid');
   if (_sysGrid) _sysGrid.addEventListener('click', () => openSystemDetail());
 
+  // Stacked-chart metric / range toggles.
+  function _segSelect(group, btn) { group.querySelectorAll('.seg-btn').forEach(x => x.classList.toggle('active', x === btn)); }
+  const _stackMetric = document.getElementById('stack-metric');
+  if (_stackMetric) _stackMetric.addEventListener('click', (e) => {
+    const b = e.target.closest('.seg-btn'); if (!b) return;
+    stackMetric = b.dataset.metric; _segSelect(_stackMetric, b); loadStack();
+  });
+  const _stackRange = document.getElementById('stack-range');
+  if (_stackRange) _stackRange.addEventListener('click', (e) => {
+    const b = e.target.closest('.seg-btn'); if (!b) return;
+    stackRange = parseInt(b.dataset.range, 10); _segSelect(_stackRange, b); loadStack();
+  });
+
   // Close on backdrop click or the × button.
   const _ov = document.getElementById('detail-overlay');
   if (_ov) _ov.addEventListener('click', (e) => {
@@ -830,6 +899,9 @@
 
   refreshTokens();
   setInterval(refreshTokens, 30000);
+
+  loadStack();
+  setInterval(loadStack, 30000);
 
   // Register the service worker (app shell — installable, instant/offline UI).
   if ('serviceWorker' in navigator) {

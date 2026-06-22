@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Global stacked resource chart at the top of the Containers tab: per-container
+  CPU / memory / network usage stacked over time, with metric and range
+  (10m / 1h / 6h / 24h) toggles and a legend. Backed by a new `GET /api/stack`
+  endpoint (top 8 containers by usage + an aggregated `other` band). Adds a
+  `mem_mb` column to `container_metrics` so memory can be summed in absolute MB
+  (with an automatic migration).
 - System detail overlay: clicking any System-tab card opens a combined host
   overlay with larger CPU, memory, CPU-temp (if available), network-I/O and
   disk-I/O charts, the same live / 1h / 6h / 24h range selector, and host

@@ -408,6 +408,25 @@
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
 
+    /* ── Global stacked resource chart ────────────────────────────────────── */
+    .stack-panel { background:#0d0e1a; border:1px solid #1c1d30; border-radius:14px; padding:1rem 1.1rem 1.1rem; }
+    .stack-head { display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-bottom:.8rem; }
+    .stack-title { font-size:.78rem; font-weight:600; color:#cbd5e1; letter-spacing:.01em; }
+    .stack-title span { font-family:'JetBrains Mono',monospace; font-size:.72rem; color:#9aa1b2; margin-left:.4rem; }
+    .stack-controls { display:flex; gap:.55rem; flex-wrap:wrap; }
+    .seg { display:inline-flex; gap:2px; padding:3px; background:#0c0d17; border:1px solid #1c1d30; border-radius:.55rem; }
+    .seg-btn {
+      font-family:'JetBrains Mono',monospace; font-size:.64rem; color:#9aa1b2;
+      padding:.26rem .6rem; border:0; border-radius:.38rem; background:transparent; cursor:pointer; transition:all .14s;
+    }
+    .seg-btn:hover { color:#e5e7eb; background:#16172a; }
+    .seg-btn.active { color:#0c0d17; background:#a78bfa; font-weight:500; }
+    .stack-chart { width:100%; }
+    .stack-legend { display:flex; flex-wrap:wrap; gap:.35rem .9rem; margin-top:.7rem; }
+    .stack-leg-item { display:inline-flex; align-items:center; gap:.35rem; font-family:'JetBrains Mono',monospace; font-size:.62rem; color:#9aa1b2; }
+    .stack-leg-dot { width:.6rem; height:.6rem; border-radius:2px; flex-shrink:0; }
+    .stack-axis { display:flex; justify-content:space-between; margin-top:5px; font-family:'JetBrains Mono',monospace; font-size:.6rem; color:#9aa1b2; }
+
     ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #2e2e50; border-radius: 3px; }
@@ -542,6 +561,28 @@
 
   <!-- Tab: Containers -->
   <div id="tab-containers" class="tab-panel">
+
+    <!-- Global stacked resource chart -->
+    <div class="stack-panel mb-8">
+      <div class="stack-head">
+        <div class="stack-title">Resource usage <span id="stack-total"></span></div>
+        <div class="stack-controls">
+          <div class="seg" id="stack-metric">
+            <button class="seg-btn active" data-metric="cpu">CPU</button>
+            <button class="seg-btn" data-metric="mem">Memory</button>
+            <button class="seg-btn" data-metric="net">Net</button>
+          </div>
+          <div class="seg" id="stack-range">
+            <button class="seg-btn" data-range="600">10m</button>
+            <button class="seg-btn active" data-range="3600">1h</button>
+            <button class="seg-btn" data-range="21600">6h</button>
+            <button class="seg-btn" data-range="86400">24h</button>
+          </div>
+        </div>
+      </div>
+      <div id="stack-chart" class="stack-chart"></div>
+      <div id="stack-legend" class="stack-legend"></div>
+    </div>
 
     <div class="mb-8">
       <div class="section-bar">
