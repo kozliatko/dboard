@@ -1,0 +1,12 @@
+# gitleaks configuration for dboard.
+# Extends the default ruleset and allowlists the test suite, whose fixtures use
+# deliberately fake API keys (e.g. FAKE_KEY, sk-ant-api03-… dummy values) that
+# the secret scanner would otherwise flag as generic API keys.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test fixtures use fake sample keys, not real secrets"
+paths = [
+  '''tests/.*''',
+]
