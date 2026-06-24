@@ -92,6 +92,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
 
       - name: Prune old GHCR versions (keep latest + 1 previous)
         if: github.event_name == 'push'
