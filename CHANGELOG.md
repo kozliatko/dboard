@@ -7,39 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-24
+
 ### Added
 - **Demo deployment mode** (`docker-compose.demo.yml`): plain HTTP on port 8700,
   no Caddy required, no auth, no compression — intended for quick local
   evaluation on a trusted network. Documented as insecure in the README with a
   feature-comparison table.
-- Health check on `socket-proxy`: HAProxy is probed via
-  `wget /version` every 30 s. `dboard` now uses `depends_on: condition:
-  service_healthy` so it waits for a confirmed-healthy proxy before starting,
-  eliminating the race condition on stack restart.
+- Health check on `socket-proxy`: port 2375 is probed with `nc -z` every 30 s.
+  `dboard` uses `depends_on: condition: service_healthy` so it waits for a
+  confirmed-healthy proxy before starting, eliminating the race condition on
+  stack restart. `nc` is used instead of `wget` to avoid interception by a
+  transparent HTTP proxy (e.g. Squid).
 - Hide the **Proxied** section in the Containers tab when no proxied containers
   exist — the entire block (header, filter, table) is suppressed rather than
   showing an empty table.
-
-### Changed
-- Both compose files now reference the pre-built image
-  `ghcr.io/kozliatko/dboard:latest` from GHCR instead of building locally.
-  Deployment is now `docker compose pull && docker compose up -d` with no
-  build toolchain required on the host.
-- `NO_PROXY` / `no_proxy` set to `socket-proxy,localhost,127.0.0.1` in both
-  compose files so the Docker SDK bypasses any corporate HTTP proxy (e.g.
-  Squid) for inter-container traffic.
-- CI: `provenance: false` and `sbom: false` added to `build-push-action` to
-  prevent untagged attestation manifests from appearing as GHCR versions and
-  confusing the version-prune step.
-- CI: GHCR version pruning replaced the `actions/delete-package-versions@v5`
-  action (Node 20) with a plain `gh api` shell script — no Node.js runtime
-  needed, no deprecation warnings.
-- Dockerfile assets stage switched from `debian:12-slim` + `apt-get` to
-  BuildKit `ADD <url>` — downloads the Tailwind CLI via the Docker daemon HTTP
-  client, bypassing container network isolation without needing a package
-  manager.
-
-### Added
 - Global stacked resource chart at the top of the Containers tab: per-container
   CPU / memory / network usage stacked over time, with metric and range
   (10m / 1h / 6h / 24h) toggles and a legend. Hovering shows a vertical guide,
@@ -77,6 +59,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as the logo in the page header.
 - Documentation: how the disk-probe mechanism works and a step-by-step guide for
   monitoring additional separate disks.
+
+### Changed
+- Both compose files now reference the pre-built image
+  `ghcr.io/kozliatko/dboard:latest` from GHCR instead of building locally.
+  Deployment is now `docker compose pull && docker compose up -d` with no
+  build toolchain required on the host.
+- `NO_PROXY` / `no_proxy` set to `socket-proxy,localhost,127.0.0.1` in both
+  compose files so the Docker SDK bypasses any corporate HTTP proxy (e.g.
+  Squid) for inter-container traffic to `socket-proxy:2375`.
+- CI: `provenance: false` and `sbom: false` added to `build-push-action` to
+  prevent untagged attestation manifests from appearing as GHCR versions and
+  confusing the version-prune step.
+- CI: GHCR version pruning replaced the `actions/delete-package-versions@v5`
+  action (Node 20, no v6 available) with a plain `gh api` shell script — no
+  Node.js runtime needed, no deprecation warnings.
+- Dockerfile assets stage switched from `debian:12-slim` + `apt-get` to
+  BuildKit `ADD <url>` — downloads the Tailwind CLI via the Docker daemon HTTP
+  client, bypassing container network isolation without needing a package
+  manager.
 
 ## [0.2.0] - 2026-06-22
 
@@ -164,6 +165,7 @@ Initial release.
 - 57 unit tests covering helpers, token validators and the persistence layer.
 - Anonymized dashboard screenshots in the documentation.
 
-[Unreleased]: https://github.com/kozliatko/dboard/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/kozliatko/dboard/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/kozliatko/dboard/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/kozliatko/dboard/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/kozliatko/dboard/releases/tag/v0.1.0
