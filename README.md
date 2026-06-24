@@ -74,6 +74,42 @@ The dashboard is served at `https://<your-domain>/` (default in this repo:
 
 ---
 
+## Demo mode (no Caddy, no auth)
+
+> ⚠️ **Not for production.** This variant has no TLS and no authentication.
+> Anyone who can reach port 8700 on the host has full read access to the
+> dashboard. Use only on a trusted local network, behind a firewall, or over
+> an SSH tunnel.
+
+A separate `docker-compose.demo.yml` is provided for quick local evaluation
+without a running Caddy instance:
+
+```bash
+cp .env.example .env
+sudo mkdir -p /opt/dboard/diskprobe   # one-time, required for disk stats
+
+docker compose -f docker-compose.demo.yml up -d
+```
+
+The dashboard is then available at `http://<host-ip>:8700/` over plain HTTP,
+with no authentication prompt.
+
+**What's missing compared to the production compose:**
+
+| Feature | Production (`docker-compose.yml`) | Demo (`docker-compose.demo.yml`) |
+|---|---|---|
+| TLS | ✅ Caddy (automatic cert) | ❌ plain HTTP |
+| Authentication | ✅ HTTP Basic Auth | ❌ none |
+| Compression | ✅ gzip / zstd | ❌ none |
+| Public port | ❌ none (proxied) | ✅ 8700 |
+| PWA install | ✅ works (HTTPS) | ❌ disabled by browser (requires HTTPS) |
+
+The Docker API is still proxied through `socket-proxy` and the container still
+runs non-root with a read-only filesystem — the security hardening of the app
+itself is unchanged. Only the network edge (TLS, auth) is removed.
+
+---
+
 ## Configuration
 
 ### Environment variables

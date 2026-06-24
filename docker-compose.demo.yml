@@ -1,0 +1,63 @@
+# ⚠️  DEMO ONLY — NOT FOR PRODUCTION USE
+#
+# This compose file runs dboard without Caddy:
+#   - plain HTTP on port 8700 (no TLS)
+#   - no authentication
+#   - no compression
+#
+# Anyone who can reach port 8700 on this host has full read access to the
+# dashboard, including container names, resource usage, and any API key hints.
+# Do NOT expose this port to the internet without additional protection
+# (firewall rules, VPN, SSH tunnel, etc.).
+#
+# For a secure deployment use docker-compose.yml instead (Caddy + Basic Auth).
+
+services:
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    restart: unless-stopped
+    environment:
+      CONTAINERS: 1
+      VERSION: 1
+      POST: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - default
+    security_opt:
+      - no-new-privileges:true
+
+  dboard:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - socket-proxy
+    networks:
+      - default
+    ports:
+      - "8700:8000"
+    environment:
+      DOCKER_HOST: tcp://socket-proxy:2375
+      SAMPLE_INTERVAL: ${SAMPLE_INTERVAL:-30}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      GITLAB_TOKEN: ${GITLAB_TOKEN:-}
+      GITLAB_HOST: ${GITLAB_HOST:-}
+    volumes:
+      - /opt/dboard/diskprobe:/host/root:ro
+      - /boot:/host/boot:ro
+      - dboard_data:/app/data
+    tmpfs:
+      - /tmp
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  dboard_data:
