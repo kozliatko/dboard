@@ -23,7 +23,7 @@ services:
       - no-new-privileges:true
 
   dboard:
-    build: .
+    image: ghcr.io/kozliatko/dboard:latest
     restart: unless-stopped
     depends_on:
       - socket-proxy
