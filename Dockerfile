@@ -5,10 +5,9 @@
 FROM alpine:3.20 AS assets
 WORKDIR /build
 ARG TAILWIND_VERSION=v3.4.17
-RUN apk add --no-cache curl ca-certificates \
- && curl -fsSL -o /usr/local/bin/tailwindcss \
-      "https://github.com/tailwindlabs/tailwindcss/releases/download/${TAILWIND_VERSION}/tailwindcss-linux-x64" \
- && chmod +x /usr/local/bin/tailwindcss
+ADD --chmod=755 \
+    "https://github.com/tailwindlabs/tailwindcss/releases/download/${TAILWIND_VERSION}/tailwindcss-linux-x64" \
+    /usr/local/bin/tailwindcss
 
 COPY app/templates ./templates
 COPY app/static ./static
