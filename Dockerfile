@@ -2,11 +2,10 @@
 # Replaces the cdn.tailwindcss.com runtime engine, which executed third-party
 # JavaScript in the page. The standalone CLI scans our markup + JS for the
 # utility classes actually used and emits a plain, self-hosted CSS file.
-FROM debian:12-slim AS assets
+FROM alpine:3.20 AS assets
 WORKDIR /build
 ARG TAILWIND_VERSION=v3.4.17
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
- && rm -rf /var/lib/apt/lists/* \
+RUN apk add --no-cache curl ca-certificates \
  && curl -fsSL -o /usr/local/bin/tailwindcss \
       "https://github.com/tailwindlabs/tailwindcss/releases/download/${TAILWIND_VERSION}/tailwindcss-linux-x64" \
  && chmod +x /usr/local/bin/tailwindcss
