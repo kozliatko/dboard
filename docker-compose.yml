@@ -21,12 +21,19 @@ services:
     # rootfs can't be read-only; no-new-privileges still blocks escalation.
     security_opt:
       - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:2375/version"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
 
   dboard:
     image: ghcr.io/kozliatko/dboard:latest
     restart: unless-stopped
     depends_on:
-      - socket-proxy
+      socket-proxy:
+        condition: service_healthy
     networks:
       - default
       - caddy
