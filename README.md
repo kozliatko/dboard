@@ -47,11 +47,14 @@ Monitors containers, host system metrics, and API token validity — all in one 
 ## Requirements
 
 - Docker + Docker Compose
-- [caddy-docker-proxy](https://github.com/lucaslorentz/caddy-docker-proxy) running with the shared `caddy` network
+- [caddy-docker-proxy](https://github.com/lucaslorentz/caddy-docker-proxy) running with the shared `caddy` network *(production only — not needed for demo mode)*
 
 ---
 
 ## Quick start
+
+The image is pre-built on every push to `main` and published to GHCR —
+no local build required.
 
 ```bash
 cp .env.example .env
@@ -63,6 +66,9 @@ cp .env.example .env
 # Generate the hash with (note: double every '$' to '$$' in compose):
 docker exec caddy caddy hash-password --plaintext 'choose-a-strong-password'
 
+sudo mkdir -p /opt/dboard/diskprobe   # one-time, required for disk stats
+
+docker compose pull
 docker compose up -d
 ```
 
@@ -107,6 +113,11 @@ with no authentication prompt.
 The Docker API is still proxied through `socket-proxy` and the container still
 runs non-root with a read-only filesystem — the security hardening of the app
 itself is unchanged. Only the network edge (TLS, auth) is removed.
+
+> **Corporate / Squid proxy environments:** both compose files set `NO_PROXY=socket-proxy`
+> so the Docker SDK bypasses any system HTTP proxy for inter-container traffic.
+> Without this, a transparent proxy intercepts the connection to `socket-proxy:2375`
+> and the dashboard shows "Docker socket not available".
 
 ---
 
@@ -364,6 +375,7 @@ shared external `caddy` network.
 | Cross-site scripting | All dynamic values are HTML-escaped. A strict **Content-Security-Policy** (`script-src 'self'`, no inline scripts, no third-party CDNs) is sent on every response, plus `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`. |
 | Supply chain | No runtime CDN — Tailwind is compiled to a static stylesheet at image build time. Python deps are pinned. CI runs **gitleaks** (secret scan) and **trivy** (vuln scan). |
 | Secrets in git | `.env` is in `.gitignore`; only `.env.example` (with empty values) is committed. |
+| Startup race condition | `dboard` uses `depends_on: condition: service_healthy` and only starts after `socket-proxy` passes its health check (`wget /version` every 30 s). |
 
 ---
 
