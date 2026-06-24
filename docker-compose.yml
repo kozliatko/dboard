@@ -33,6 +33,8 @@ services:
     environment:
       # Talk to the Docker API through the read-only proxy, never the raw socket
       DOCKER_HOST: tcp://socket-proxy:2375
+      NO_PROXY: "socket-proxy,localhost,127.0.0.1"
+      no_proxy: "socket-proxy,localhost,127.0.0.1"
       # Background sampling cadence in seconds (0 = on-demand only, no idle load)
       SAMPLE_INTERVAL: ${SAMPLE_INTERVAL:-30}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}

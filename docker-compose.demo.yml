@@ -38,6 +38,8 @@ services:
       - "8700:8000"
     environment:
       DOCKER_HOST: tcp://socket-proxy:2375
+      NO_PROXY: "socket-proxy,localhost,127.0.0.1"
+      no_proxy: "socket-proxy,localhost,127.0.0.1"
       SAMPLE_INTERVAL: ${SAMPLE_INTERVAL:-30}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
