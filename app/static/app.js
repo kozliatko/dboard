@@ -898,6 +898,7 @@
     redraw('others');
     updateDetail();   // keep the open overlay live
 
+    $('section-proxied').hidden = rawData.proxied.length === 0;
     $('lbl-proxied').textContent = `${data.running_proxied} running / ${rawData.proxied.length} total`;
     $('lbl-others').textContent  = `${data.running_others} running / ${rawData.others.length} total`;
     $('summary').textContent     = `${data.running_proxied} proxied running · ${data.running_others} other running`;
