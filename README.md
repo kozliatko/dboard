@@ -24,6 +24,9 @@ Monitors containers, host system metrics, and API token validity — all in one 
 **System** — host metrics with SVG sparklines and warn/crit thresholds:
 ![System tab](docs/screenshot-system.png)
 
+**Networks** — all Docker networks with driver badges, container counts and connected container names:
+![Networks tab](docs/screenshot-networks.png)
+
 **Tokens** — API key validation without exposing raw values:
 ![Tokens tab](docs/screenshot-tokens.png)
 
