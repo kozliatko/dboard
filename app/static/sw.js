@@ -6,7 +6,7 @@
 // so the data stays live.
 //
 // Bump CACHE on each release to evict the old shell.
-const CACHE = 'dboard-shell-v1';
+const CACHE = 'dboard-shell-v2';
 
 const SHELL = [
   '/',
