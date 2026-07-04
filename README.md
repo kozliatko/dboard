@@ -31,7 +31,7 @@ Monitors containers, host system metrics, and API token validity — all in one 
 
 ## Features
 
-- **Three-tab UI** — Containers, System, Tokens
+- **Four-tab UI** — Containers, Networks, System, Tokens
 - **Container tables** — sortable and filterable; shows status, health, uptime, CPU, RAM, network I/O with per-column sparklines
 - **Global stacked chart** — at the top of the Containers tab: per-container CPU / memory / network usage stacked over time, with metric and range (10m / 1h / 6h / 24h) toggles and hover tooltips (container, value, time)
 - **Container detail overlay** — click any row for a larger view: live CPU, memory and network-rate area charts with a time axis, a selectable range (live / 1h / 6h / 24h, from SQLite history), plus metadata
@@ -228,6 +228,10 @@ once.
 | `GET /api/tokens` | Token validation results (5-min cache) |
 | `GET /api/tokens?refresh=true` | Force re-validation of all tokens |
 
+> **`/api/containers`** response includes a top-level `networks` key: a list of
+> Docker network objects (`name`, `id`, `driver`, `scope`, `internal`,
+> `container_count`, `container_names`) used by the Networks tab.
+
 ---
 
 ## Tabs
@@ -259,6 +263,15 @@ Live host metrics refreshed every 5 seconds. Each stat card shows:
 Network I/O and Disk I/O cards show dual-line sparklines (read vs. write / rx vs. tx).
 
 CPU temperature is shown if the host exposes temperature sensors (`coretemp`, `k10temp`, `acpitz`, or similar).
+
+### Networks
+
+All Docker networks on the host, with:
+- **Driver badge** — bridge, host, overlay, macvlan, null (color-coded)
+- **Internal / swarm badges** where applicable
+- **Container count** and expandable list of connected container names
+
+Networks are sorted by driver class (non-null first) then by container count descending.
 
 ### Tokens
 
@@ -367,7 +380,7 @@ shared external `caddy` network.
 
 | Concern | Mitigation |
 |---|---|
-| Docker API abuse / container escape | dboard never mounts the raw socket. It talks to `tecnativa/docker-socket-proxy` over TCP, which whitelists **GET** `containers`/`version` only — **all writes (POST) are blocked (403)**. A read-only bind mount of `docker.sock` would *not* do this; the socket stays read-write at the API level regardless of `:ro`. |
+| Docker API abuse / container escape | dboard never mounts the raw socket. It talks to `tecnativa/docker-socket-proxy` over TCP, which whitelists **GET** `containers`/`version`/`networks` only — **all writes (POST) are blocked (403)**. A read-only bind mount of `docker.sock` would *not* do this; the socket stays read-write at the API level regardless of `:ro`. |
 | Host filesystem disclosure | Only an empty probe dir on `/` and `/boot` are mounted read-only — **never the host root**. `/etc`, `/root`, `/home`, SSH keys and other projects' `.env` files are not visible to the container. |
 | Privilege escalation | Container runs as **non-root** (uid 10001), `cap_drop: ALL`, `no-new-privileges`, read-only root filesystem (`tmpfs` for `/tmp`). |
 | Unauthenticated access | All traffic is gated by Caddy **HTTP Basic Auth**. Note: containers *already on the shared `caddy` network* can still reach `dboard:8000` directly — treat that network as trusted. |

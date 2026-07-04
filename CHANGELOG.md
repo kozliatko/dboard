@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Networks tab** — dedicated fourth tab showing all Docker networks with driver
+  type (bridge/host/overlay/macvlan/null), scope, internal flag, container count
+  and per-network container name tags. A live badge in the tab bar shows the
+  total network count. The section is built from `/networks` metadata combined
+  with network membership data already present in container attrs (the `/networks`
+  list endpoint omits the Containers field, so the mapping is derived from
+  `NetworkSettings.Networks` on each container).
+- `NETWORKS: 1` added to `socket-proxy` environment in both compose files to
+  allow the Docker Networks API endpoint.
+- `networks` key added to the `/api/containers` response: list of network objects
+  (`name`, `id`, `driver`, `scope`, `internal`, `container_count`,
+  `container_names`) sorted by driver class then by container count descending.
+
 ## [0.3.0] - 2026-06-24
 
 ### Added
