@@ -9,6 +9,7 @@ services:
     restart: unless-stopped
     environment:
       CONTAINERS: 1      # GET /containers/json, /containers/{id}/json, /stats
+      NETWORKS: 1        # GET /networks — needed for network topology panel
       VERSION: 1         # GET /version — needed for SDK API negotiation
       POST: 0            # block every write operation
       # everything else stays disabled (default 0)

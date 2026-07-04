@@ -899,6 +899,7 @@
     updateDetail();   // keep the open overlay live
 
     $('section-proxied').hidden = rawData.proxied.length === 0;
+    renderNetworks(data.networks || []);
     $('lbl-proxied').textContent = `${data.running_proxied} running / ${rawData.proxied.length} total`;
     $('lbl-others').textContent  = `${data.running_others} running / ${rawData.others.length} total`;
     $('summary').textContent     = `${data.running_proxied} proxied running · ${data.running_others} other running`;
@@ -907,6 +908,34 @@
     $('badge-containers').textContent = `${totalRunning} / ${totalAll}`;
     try { $('clock').textContent = new Date(data.updated_at).toLocaleTimeString(); }
     catch(_) { $('clock').textContent = data.updated_at; }
+  }
+
+  // ── Networks panel ───────────────────────────────────────────────────────────
+  function renderNetworks(nets) {
+    const section = $('section-networks');
+    const grid    = $('networks-grid');
+    if (!nets || nets.length === 0) { section.hidden = true; return; }
+    section.hidden = false;
+    $('lbl-networks').textContent = `${nets.length} total · ${nets.reduce((s, n) => s + n.container_count, 0)} connections`;
+
+    const DRIVER_CLS = { bridge: 'bridge', host: 'host', overlay: 'overlay', macvlan: 'macvlan', null: 'null' };
+    grid.innerHTML = nets.map(n => {
+      const dcls  = DRIVER_CLS[n.driver] || 'other';
+      const badges = [
+        `<span class="net-badge net-badge-${dcls}">${n.driver}</span>`,
+        n.internal ? `<span class="net-badge net-badge-internal">internal</span>` : '',
+        n.scope === 'swarm' ? `<span class="net-badge net-badge-swarm">swarm</span>` : '',
+      ].join('');
+      const ctags = n.container_names.map(name =>
+        `<span class="net-ctag">${name}</span>`
+      ).join('');
+      return `<div class="net-card">
+        <div class="net-card-name">${n.name}</div>
+        <div class="net-badges">${badges}</div>
+        <div class="net-count"><strong>${n.container_count}</strong> container${n.container_count !== 1 ? 's' : ''}</div>
+        ${ctags ? `<div class="net-containers">${ctags}</div>` : ''}
+      </div>`;
+    }).join('');
   }
 
   // ── Event wiring (CSP-safe: no inline handlers) ──────────────────────────────

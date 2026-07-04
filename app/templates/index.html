@@ -270,6 +270,34 @@
     .tbl tbody tr.row-crit td:first-child { box-shadow: inset 2px 0 0 #991b1b; }
     .tbl tbody tr.row-crit td { background: rgba(239,68,68,.025); }
 
+    /* Network grid */
+    .net-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .75rem; }
+    .net-card {
+      background: #0d0e1a; border: 1px solid #1e1b4b; border-radius: .5rem;
+      padding: .85rem 1rem; display: flex; flex-direction: column; gap: .45rem;
+    }
+    .net-card-name { font-size: .85rem; font-weight: 600; color: #e2e8f0; word-break: break-all; }
+    .net-badges { display: flex; flex-wrap: wrap; gap: .3rem; }
+    .net-badge {
+      font-size: .65rem; font-weight: 600; padding: .1rem .45rem;
+      border-radius: 9999px; letter-spacing: .02em; text-transform: uppercase;
+    }
+    .net-badge-bridge  { background: #1e3a5f; color: #60a5fa; }
+    .net-badge-host    { background: #3b2200; color: #fb923c; }
+    .net-badge-overlay { background: #2e1a5e; color: #a78bfa; }
+    .net-badge-macvlan { background: #14532d; color: #4ade80; }
+    .net-badge-null    { background: #1f2937; color: #6b7280; }
+    .net-badge-other   { background: #1e293b; color: #94a3b8; }
+    .net-badge-internal{ background: #1c1917; color: #a8a29e; }
+    .net-badge-swarm   { background: #172554; color: #93c5fd; }
+    .net-count { font-size: .78rem; color: #6b7280; }
+    .net-count strong { color: #c4b5fd; }
+    .net-containers { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .1rem; }
+    .net-ctag {
+      font-size: .65rem; background: #12131e; border: 1px solid #2a2650;
+      border-radius: .25rem; padding: .05rem .35rem; color: #94a3b8;
+    }
+
     /* Token cards */
     .tok-grid {
       display: grid;
@@ -651,6 +679,13 @@
           </tbody>
         </table>
       </div>
+    </div>
+
+    <div id="section-networks" class="mt-8" hidden>
+      <div class="section-bar mb-3">
+        <div class="section-title">Networks <span id="lbl-networks" class="text-gray-400 text-sm font-normal"></span></div>
+      </div>
+      <div id="networks-grid" class="net-grid"></div>
     </div>
 
   </div><!-- /tab-containers -->

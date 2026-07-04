@@ -202,6 +202,28 @@ def _stats_sync(container_id: str) -> dict:
         return {}
 
 
+def _networks_sync(client, net_containers: dict) -> list:
+    """Fetch network metadata; container counts come from net_containers mapping."""
+    try:
+        nets = client.networks.list()
+        result = []
+        for n in nets:
+            names = sorted(net_containers.get(n.name, []))
+            result.append({
+                "name": n.name,
+                "id": n.short_id,
+                "driver": n.attrs.get("Driver", "bridge"),
+                "scope": n.attrs.get("Scope", "local"),
+                "internal": bool(n.attrs.get("Internal", False)),
+                "container_count": len(names),
+                "container_names": names,
+            })
+        result.sort(key=lambda x: (x["driver"] == "null", -x["container_count"], x["name"]))
+        return result
+    except Exception:
+        return []
+
+
 def _uptime(started_at: str) -> str | None:
     try:
         delta = datetime.now(timezone.utc) - date_parser.parse(started_at)
@@ -985,7 +1007,7 @@ async def _collect_containers() -> dict:
     try:
         all_containers = d.containers.list(all=True)
     except Exception as e:
-        return {"error": str(e), "proxied": [], "others": []}
+        return {"error": str(e), "proxied": [], "others": [], "networks": []}
 
     proxied = []
     others = []
@@ -1003,6 +1025,7 @@ async def _collect_containers() -> dict:
         health_obj = state.get("Health")
         health = health_obj.get("Status") if health_obj else None
 
+        net_settings = c.attrs.get("NetworkSettings", {}).get("Networks", {})
         entry = {
             "_id": c.id,
             "name": c.name.lstrip("/"),
@@ -1011,6 +1034,7 @@ async def _collect_containers() -> dict:
             "health": health,
             "domains": domains,
             "uptime": _uptime(state.get("StartedAt", "")) if c.status == "running" else None,
+            "networks": sorted(net_settings.keys()),
         }
 
         if has_caddy:
@@ -1051,6 +1075,20 @@ async def _collect_containers() -> dict:
                     _container_spark[name]["net_tx"].append(tx_rate)
                 _container_io_prev[name] = {"t": now, "rx": p["net_rx"], "tx": p["net_tx"]}
 
+    # Build network → container name mapping from already-fetched container attrs.
+    # (The Docker /networks list endpoint omits the Containers field; individual
+    # /networks/{id} calls would be N extra round-trips, so we derive it here.)
+    net_containers: dict[str, list[str]] = {}
+    for c in all_containers:
+        cname = c.name.lstrip("/")
+        for net_name in c.attrs.get("NetworkSettings", {}).get("Networks", {}).keys():
+            net_containers.setdefault(net_name, []).append(cname)
+
+    # Fetch Docker networks (best-effort — requires NETWORKS: 1 in socket-proxy)
+    networks = await asyncio.get_event_loop().run_in_executor(
+        executor, _networks_sync, d, net_containers
+    )
+
     # Persist container stats to DB (fire-and-forget)
     if all_running:
         loop.run_in_executor(executor, _db_write_containers, all_running)
@@ -1070,6 +1108,7 @@ async def _collect_containers() -> dict:
     return {
         "proxied": proxied,
         "others": others,
+        "networks": networks,
         "running_proxied": sum(1 for p in proxied if p["status"] == "running"),
         "running_others": sum(1 for p in others if p["status"] == "running"),
         "sample_interval": SAMPLE_INTERVAL or 5,
