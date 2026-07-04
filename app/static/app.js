@@ -912,11 +912,11 @@
 
   // ── Networks panel ───────────────────────────────────────────────────────────
   function renderNetworks(nets) {
-    const section = $('section-networks');
-    const grid    = $('networks-grid');
-    if (!nets || nets.length === 0) { section.hidden = true; return; }
-    section.hidden = false;
-    $('lbl-networks').textContent = `${nets.length} total · ${nets.reduce((s, n) => s + n.container_count, 0)} connections`;
+    const grid = $('networks-grid');
+    if (!nets || nets.length === 0) { grid.innerHTML = ''; return; }
+    const totalConn = nets.reduce((s, n) => s + n.container_count, 0);
+    $('lbl-networks').textContent = `${nets.length} total · ${totalConn} connections`;
+    $('badge-networks').textContent = nets.length;
 
     const DRIVER_CLS = { bridge: 'bridge', host: 'host', overlay: 'overlay', macvlan: 'macvlan', null: 'null' };
     grid.innerHTML = nets.map(n => {
