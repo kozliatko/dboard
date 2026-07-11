@@ -719,6 +719,26 @@ def _check_tavily(key: str) -> dict:
         return {"valid": False, "detail": str(e)}
 
 
+def _check_groq(key: str) -> dict:
+    # Groq runs behind Cloudflare which blocks Python-urllib UA from Docker
+    code, body, _ = _http_get(
+        "https://api.groq.com/openai/v1/models",
+        headers={"Authorization": f"Bearer {key}", "User-Agent": "curl/8.5.0"},
+    )
+    if code != 200:
+        return {"valid": False, "detail": f"HTTP {code}"}
+    models = sorted([m["id"] for m in json.loads(body).get("data", [])])
+    llama = [m for m in models if "llama" in m.lower()]
+    return {
+        "valid": True,
+        "detail": f"{len(models)} models",
+        "extras": _extras(
+            ("Models", str(len(models))),
+            ("Llama models", ", ".join(llama[:4])),
+        ),
+    }
+
+
 def _check_gitlab(key: str) -> dict:
     host = os.environ.get("GITLAB_HOST", "gitlab.com").strip().rstrip("/")
     base = f"https://{host}/api/v4"
@@ -767,6 +787,7 @@ _TOKEN_DEFS = [
     {"id": "gemini",    "name": "Gemini",    "env_var": "GEMINI_API_KEY",     "fn": _check_gemini},
     {"id": "openai",    "name": "OpenAI",    "env_var": "OPENAI_API_KEY",     "fn": _check_openai},
     {"id": "deepseek",  "name": "DeepSeek",  "env_var": "DEEPSEEK_API_KEY",   "fn": _check_deepseek},
+    {"id": "groq",      "name": "Groq",      "env_var": "GROQ_API_KEY",       "fn": _check_groq},
     {"id": "tavily",    "name": "Tavily",    "env_var": "TAVILY_API_KEY",     "fn": _check_tavily},
 ]
 
