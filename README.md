@@ -140,6 +140,7 @@ All variables are optional. Leave any blank to disable that token check.
 | `GEMINI_API_KEY` | Google Gemini API key |
 | `OPENAI_API_KEY` | OpenAI API key |
 | `DEEPSEEK_API_KEY` | DeepSeek API key |
+| `GROQ_API_KEY` | Groq API key |
 | `TAVILY_API_KEY` | Tavily search API key |
 
 Copy `.env.example` to `.env` and populate the keys you want validated.
@@ -291,6 +292,7 @@ Each card shows:
   - **Gemini** — model count, Gemini model names
   - **OpenAI** — model count, GPT model names
   - **DeepSeek** — model names, account balance
+  - **Groq** — model count, Llama model names
   - **Tavily** — search API response time
 
 ---

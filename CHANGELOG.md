@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Groq API key validator** — validates via `GET /openai/v1/models`; shows
+  total model count and Llama model names. Uses `User-Agent: curl/8.5.0` to
+  bypass Cloudflare bot protection on `api.groq.com` from inside Docker.
+  Configured via `GROQ_API_KEY` environment variable.
+
 ## [0.3.2] - 2026-07-04
 
 ### Changed
