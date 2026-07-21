@@ -395,19 +395,22 @@
   // ── Tokens ──────────────────────────────────────────────────────────────────
 
   function renderTokens(tokens) {
-    if (!tokens.length) {
-      $('tok-grid').innerHTML = '<span style="color:#374151;font-size:.8rem;font-style:italic">No tokens configured</span>';
+    const configured = tokens.filter(t => t.configured);
+    const tabBtn = document.querySelector('[data-tab="tokens"]');
+    const tabPanel = $('tab-tokens');
+    if (!configured.length) {
+      if (tabBtn)   tabBtn.hidden = true;
+      if (tabPanel) tabPanel.hidden = true;
+      // If tokens tab was active, fall back to containers
+      if (tabPanel && tabPanel.classList.contains('active')) switchTab('containers');
       return;
     }
-    tokens = tokens.filter(t => t.configured);
-    const configured = tokens;
+    if (tabBtn)   tabBtn.hidden = false;
+    if (tabPanel) tabPanel.hidden = false;
+    tokens = configured;
     const valid = configured.filter(t => t.valid).length;
-    $('lbl-tokens').textContent = configured.length
-      ? `${valid} valid / ${configured.length} configured`
-      : 'none configured';
-    $('badge-tokens').textContent = configured.length
-      ? `${valid} / ${configured.length}`
-      : '';
+    $('lbl-tokens').textContent = `${valid} valid / ${configured.length} configured`;
+    $('badge-tokens').textContent = `${valid} / ${configured.length}`;
 
     $('tok-grid').innerHTML = tokens.map(t => {
       const cls = !t.configured ? 'unconfigured' : t.valid ? 'valid' : 'invalid';
