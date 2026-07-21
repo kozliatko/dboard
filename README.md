@@ -427,6 +427,12 @@ renders when the server is unreachable. **`/api/*` requests always bypass the
 cache** — metrics are never served stale. Bump `CACHE` in `app/static/sw.js` on
 each release to evict the old shell.
 
+When a new version is deployed, the SW activates and notifies all open tabs via
+a **"New version available · Reload"** banner in the bottom-right corner. Clicking
+**Reload** loads the fresh shell from the new cache. The current version is
+shown next to the dboard logo in the header (read from the `VERSION` file at
+startup).
+
 > Installation requires a secure context (HTTPS), which Caddy provides in
 > production. Over plain `http://<ip>` the browser disables service workers by
 > design.

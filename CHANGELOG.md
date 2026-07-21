@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-07-21
+
+### Added
+- **Version badge in header** — current release (read from `VERSION` file at
+  startup) is displayed next to the dboard logo in grey monospace text.
+- **Update notification banner** — when a new service worker activates (i.e.
+  a new release is deployed), a fixed bottom-right banner appears with a
+  **Reload** button and a dismiss **✕**. Clicking Reload fetches the fresh
+  shell from the new cache. The banner is shown only on real updates, not on
+  the first install.
+
+### Changed
+- SW cache bumped from `dboard-shell-v2` to `dboard-shell-v3` to force
+  eviction of the old shell after the tokens tab hide change.
+
 ## [0.3.3] - 2026-07-21
 
 ### Added
@@ -197,7 +212,8 @@ Initial release.
 - 57 unit tests covering helpers, token validators and the persistence layer.
 - Anonymized dashboard screenshots in the documentation.
 
-[Unreleased]: https://github.com/kozliatko/dboard/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/kozliatko/dboard/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/kozliatko/dboard/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/kozliatko/dboard/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/kozliatko/dboard/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/kozliatko/dboard/compare/v0.3.0...v0.3.1
