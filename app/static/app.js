@@ -1009,4 +1009,10 @@
       navigator.serviceWorker.register('/sw.js')
         .catch(err => console.warn('SW registration failed:', err));
     });
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      if (event.data?.type === 'SW_UPDATED') {
+        const banner = $('update-banner');
+        if (banner) banner.hidden = false;
+      }
+    });
   }
