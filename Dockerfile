@@ -27,6 +27,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ .
+COPY VERSION /VERSION
 # Drop in the compiled stylesheet produced by the assets stage
 COPY --from=assets /build/tailwind.css /app/static/tailwind.css
 

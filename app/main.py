@@ -26,6 +26,15 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 
+def _read_version() -> str:
+    try:
+        vfile = os.path.join(os.path.dirname(_APP_DIR), "VERSION")
+        return open(vfile).read().strip()
+    except Exception:
+        return "dev"
+
+_VERSION = _read_version()
+
 # Ensure the web manifest is served with the spec-recommended MIME type
 mimetypes.add_type("application/manifest+json", ".webmanifest")
 
@@ -848,7 +857,7 @@ def _check_token_sync(td: dict) -> dict:
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
-    return templates.TemplateResponse(request, "index.html")
+    return templates.TemplateResponse(request, "index.html", {"version": _VERSION})
 
 
 @app.get("/sw.js")
