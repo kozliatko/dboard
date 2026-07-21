@@ -7,11 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-07-21
+
 ### Added
 - **Groq API key validator** — validates via `GET /openai/v1/models`; shows
   total model count and Llama model names. Uses `User-Agent: curl/8.5.0` to
   bypass Cloudflare bot protection on `api.groq.com` from inside Docker.
   Configured via `GROQ_API_KEY` environment variable.
+- **Tokens tab auto-hide** — the Tokens tab (button and panel) is hidden
+  entirely when no API keys are configured. If the tab was last active and
+  keys are removed, the view falls back to Containers automatically.
 
 ## [0.3.2] - 2026-07-04
 
@@ -192,7 +197,8 @@ Initial release.
 - 57 unit tests covering helpers, token validators and the persistence layer.
 - Anonymized dashboard screenshots in the documentation.
 
-[Unreleased]: https://github.com/kozliatko/dboard/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/kozliatko/dboard/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/kozliatko/dboard/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/kozliatko/dboard/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/kozliatko/dboard/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/kozliatko/dboard/compare/v0.2.0...v0.3.0
