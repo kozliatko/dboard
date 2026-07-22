@@ -399,14 +399,13 @@
     const tabBtn = document.querySelector('[data-tab="tokens"]');
     const tabPanel = $('tab-tokens');
     if (!configured.length) {
-      if (tabBtn)   tabBtn.hidden = true;
-      if (tabPanel) tabPanel.hidden = true;
-      // If tokens tab was active, fall back to containers
+      if (tabBtn)   tabBtn.style.display = 'none';
+      if (tabPanel) tabPanel.style.display = 'none';
       if (tabPanel && tabPanel.classList.contains('active')) switchTab('containers');
       return;
     }
-    if (tabBtn)   tabBtn.hidden = false;
-    if (tabPanel) tabPanel.hidden = false;
+    if (tabBtn)   tabBtn.style.display = '';
+    if (tabPanel) tabPanel.style.display = '';
     tokens = configured;
     const valid = configured.filter(t => t.valid).length;
     $('lbl-tokens').textContent = `${valid} valid / ${configured.length} configured`;

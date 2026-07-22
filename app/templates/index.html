@@ -611,7 +611,7 @@
     <button class="tab-btn" data-tab="networks">
       Networks <span id="badge-networks" class="tab-badge"></span>
     </button>
-    <button class="tab-btn" data-tab="tokens"{% if not tokens_configured %} hidden{% endif %}>
+    <button class="tab-btn" data-tab="tokens"{% if not tokens_configured %} style="display:none"{% endif %}>
       Tokens <span id="badge-tokens" class="tab-badge"></span>
     </button>
   </nav>
@@ -724,7 +724,7 @@
   </div>
 
   <!-- Tab: Tokens -->
-  <div id="tab-tokens" class="tab-panel"{% if not tokens_configured %} hidden{% endif %}>
+  <div id="tab-tokens" class="tab-panel"{% if not tokens_configured %} style="display:none"{% endif %}>
     <div class="section-bar">
       <div class="section-title">API Tokens <span id="lbl-tokens"></span></div>
       <button class="refresh-btn" id="tok-refresh-btn">↻ refresh</button>
