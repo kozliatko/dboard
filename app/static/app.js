@@ -1012,7 +1012,7 @@
     navigator.serviceWorker.addEventListener('message', (event) => {
       if (event.data?.type === 'SW_UPDATED') {
         const banner = $('update-banner');
-        if (banner) banner.hidden = false;
+        if (banner) banner.style.display = 'flex';
       }
     });
   }
