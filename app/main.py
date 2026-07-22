@@ -857,7 +857,11 @@ def _check_token_sync(td: dict) -> dict:
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
-    return templates.TemplateResponse(request, "index.html", {"version": _VERSION})
+    tokens_configured = any(os.environ.get(td["env_var"], "").strip() for td in _TOKEN_DEFS)
+    return templates.TemplateResponse(request, "index.html", {
+        "version": _VERSION,
+        "tokens_configured": tokens_configured,
+    })
 
 
 @app.get("/sw.js")
