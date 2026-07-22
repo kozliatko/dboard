@@ -18,8 +18,10 @@ RUN printf 'module.exports = { content: ["./templates/**/*.html","./static/**/*.
 # ── Stage 2: runtime ──────────────────────────────────────────────────────────
 FROM python:3.12-slim
 
+ARG GIT_COMMIT=dev
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    GIT_COMMIT=${GIT_COMMIT}
 WORKDIR /app
 
 RUN pip install --no-cache-dir --upgrade pip

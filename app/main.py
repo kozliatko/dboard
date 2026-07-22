@@ -34,6 +34,7 @@ def _read_version() -> str:
         return "dev"
 
 _VERSION = _read_version()
+_GIT_COMMIT = os.environ.get("GIT_COMMIT", "dev")[:7]
 
 # Ensure the web manifest is served with the spec-recommended MIME type
 mimetypes.add_type("application/manifest+json", ".webmanifest")
@@ -860,6 +861,7 @@ async def dashboard(request: Request):
     tokens_configured = any(os.environ.get(td["env_var"], "").strip() for td in _TOKEN_DEFS)
     return templates.TemplateResponse(request, "index.html", {
         "version": _VERSION,
+        "git_commit": _GIT_COMMIT,
         "tokens_configured": tokens_configured,
     })
 
