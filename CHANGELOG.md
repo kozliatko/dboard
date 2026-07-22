@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-07-22
+
+### Fixed
+- Tokens tab not hidden when no API keys configured — `.tab-btn { display:flex }`
+  overrode the HTML `hidden` attribute. Replaced with `style="display:none"` on
+  both server-side render (Jinja2) and JS toggle so the rule always wins.
+- Update notification banner always visible due to `display:flex` in inline style
+  conflicting with the `hidden` attribute — replaced with `display:none` default,
+  shown via `style.display = 'flex'` from JS.
+- SW cache bumped to `dboard-shell-v4` to force browser eviction of stale HTML
+  and JS after the server-side tokens tab fix.
+
+### Added
+- Git commit SHA displayed next to version in header (e.g. `v0.3.4 (db85eec)`),
+  sourced from `GIT_COMMIT` build arg set to `github.sha` in CI.
+
 ## [0.3.4] - 2026-07-21
 
 ### Added
@@ -212,7 +228,8 @@ Initial release.
 - 57 unit tests covering helpers, token validators and the persistence layer.
 - Anonymized dashboard screenshots in the documentation.
 
-[Unreleased]: https://github.com/kozliatko/dboard/compare/v0.3.4...HEAD
+[Unreleased]: https://github.com/kozliatko/dboard/compare/v0.3.5...HEAD
+[0.3.5]: https://github.com/kozliatko/dboard/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/kozliatko/dboard/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/kozliatko/dboard/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/kozliatko/dboard/compare/v0.3.1...v0.3.2
