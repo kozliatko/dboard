@@ -584,6 +584,18 @@ def _http_get(url: str, headers: dict | None = None, timeout: int = 10) -> tuple
         return None, str(e), {}
 
 
+def _http_post(url: str, payload: dict, headers: dict | None = None, timeout: int = 10) -> tuple[int | None, str, dict]:
+    data = json.dumps(payload).encode()
+    req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json", **(headers or {})}, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.status, r.read().decode(errors="replace"), dict(r.headers)
+    except urllib.error.HTTPError as e:
+        return e.code, e.read().decode(errors="replace"), dict(e.headers)
+    except Exception as e:
+        return None, str(e), {}
+
+
 def _extras(*pairs) -> list[dict]:
     return [{"label": l, "value": v} for l, v in pairs if v not in (None, "", [])]
 
@@ -749,13 +761,49 @@ def _check_cloudflare(key: str) -> dict:
         t = m.get("task", {}).get("name", "other")
         tasks[t] = tasks.get(t, 0) + 1
     top = ", ".join(f"{t} ({c})" for t, c in sorted(tasks.items(), key=lambda x: -x[1])[:3])
+
+    # Try to fetch daily neuron usage via GraphQL (requires Account Analytics: Read permission)
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00Z")
+    gql_query = {
+        "query": (
+            "{ viewer { accounts(filter:{accountTag:\"%s\"}) {"
+            " aiInferenceAdaptiveGroups(limit:1000, filter:{datetime_geq:\"%s\"})"
+            " { sum { totalNeurons } } } } }"
+        ) % (account_id, today)
+    }
+    gql_code, gql_body, _ = _http_post(
+        "https://api.cloudflare.com/client/v4/graphql",
+        gql_query,
+        headers={"Authorization": f"Bearer {key}"},
+    )
+    neurons_str = None
+    if gql_code == 200:
+        try:
+            gql_data = json.loads(gql_body)
+            if not gql_data.get("errors"):
+                groups = (
+                    gql_data.get("data", {})
+                    .get("viewer", {})
+                    .get("accounts", [{}])[0]
+                    .get("aiInferenceAdaptiveGroups", [])
+                )
+                used = sum(g.get("sum", {}).get("totalNeurons", 0) for g in groups)
+                free_limit = 10_000
+                remaining = max(0, free_limit - used)
+                neurons_str = f"{used:,.0f} used / {remaining:,.0f} remaining (free: {free_limit:,}/day)"
+        except Exception:
+            pass
+
+    extras = [
+        ("Models", str(len(models))),
+        ("Tasks", top),
+    ]
+    if neurons_str:
+        extras.append(("Neurons today", neurons_str))
     return {
         "valid": True,
         "detail": f"{len(models)} models",
-        "extras": _extras(
-            ("Models", str(len(models))),
-            ("Tasks", top),
-        ),
+        "extras": _extras(*extras),
     }
 
 
