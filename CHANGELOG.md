@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.11] - 2026-07-23
+
+### Added
+- **Google Cloud service account key validator** — validates via the OAuth2
+  JWT assertion flow (RS256), then calls Cloud Resource Manager to confirm
+  the token works and fetch project metadata (name, lifecycle state, service
+  account email, key ID hint). Accepts the key as raw JSON or
+  base64-encoded JSON in `GOOGLE_CREDENTIALS_JSON` — no file mount needed.
+  Generate with: `GOOGLE_CREDENTIALS_JSON=$(base64 -w0 key.json)`.
+
 ## [0.3.10] - 2026-07-23
 
 ### Added
@@ -280,7 +290,8 @@ Initial release.
 - 57 unit tests covering helpers, token validators and the persistence layer.
 - Anonymized dashboard screenshots in the documentation.
 
-[Unreleased]: https://github.com/kozliatko/dboard/compare/v0.3.10...HEAD
+[Unreleased]: https://github.com/kozliatko/dboard/compare/v0.3.11...HEAD
+[0.3.11]: https://github.com/kozliatko/dboard/compare/v0.3.10...v0.3.11
 [0.3.10]: https://github.com/kozliatko/dboard/compare/v0.3.9...v0.3.10
 [0.3.9]: https://github.com/kozliatko/dboard/compare/v0.3.8...v0.3.9
 [0.3.8]: https://github.com/kozliatko/dboard/compare/v0.3.7...v0.3.8

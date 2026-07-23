@@ -142,6 +142,7 @@ All variables are optional. Leave any blank to disable that token check.
 | `DEEPSEEK_API_KEY` | DeepSeek API key |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID (required alongside `CLOUDFLARE_API_TOKEN`) |
 | `CLOUDFLARE_API_TOKEN` | Cloudflare API token (needs **Workers AI: Read** + optionally **Account Analytics: Read** for neuron stats) |
+| `GOOGLE_CREDENTIALS_JSON` | Google Cloud service account key — raw JSON or base64-encoded JSON (`GOOGLE_CREDENTIALS_JSON=$(base64 -w0 key.json)`) |
 | `HUGGINGFACE_TOKEN` | Hugging Face access token (`hf_…`) |
 | `GROQ_API_KEY` | Groq API key |
 | `TAVILY_API_KEY` | Tavily search API key |
@@ -320,6 +321,7 @@ Each card shows:
   - **OpenAI** — model count, GPT model names
   - **DeepSeek** — model names, account balance
   - **Cloudflare AI** — model count, top task categories; daily neuron usage and remaining free-tier quota (requires **Account Analytics: Read** permission on the token; omitted silently if absent)
+  - **Google Cloud** — project name, lifecycle state, service account email, key ID hint; validated via OAuth2 JWT assertion flow (RS256)
   - **Hugging Face** — username, plan (Free / PRO), token display name, permission scopes
   - **Groq** — model count, Llama model names
   - **Tavily** — search API response time
