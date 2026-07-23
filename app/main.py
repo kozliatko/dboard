@@ -821,6 +821,43 @@ def _check_cloudflare(key: str, td: dict | None = None) -> dict:
     }
 
 
+def _check_huggingface(key: str, td: dict | None = None) -> dict:
+    code, body, _ = _http_get(
+        "https://huggingface.co/api/whoami-v2",
+        headers={"Authorization": f"Bearer {key}"},
+    )
+    if code != 200:
+        return {"valid": False, "detail": f"HTTP {code}"}
+    data = json.loads(body)
+    if "error" in data:
+        return {"valid": False, "detail": data["error"]}
+    name = data.get("name", "")
+    fullname = data.get("fullname", "")
+    is_pro = data.get("isPro", False)
+    plan = "PRO" if is_pro else "Free"
+    token_info = data.get("auth", {}).get("accessToken", {})
+    token_name = token_info.get("displayName", "")
+    role = token_info.get("role", "")
+    if role == "fineGrained":
+        fg = token_info.get("fineGrained", {})
+        perms = fg.get("global", []) or []
+        for scoped in fg.get("scoped", []):
+            perms += scoped.get("permissions", [])
+        perms_str = ", ".join(sorted(set(perms))) if perms else "none"
+    else:
+        perms_str = role or "full access"
+    return {
+        "valid": True,
+        "detail": f"@{name}",
+        "extras": _extras(
+            ("User", fullname or name),
+            ("Plan", plan),
+            ("Token", token_name),
+            ("Permissions", perms_str),
+        ),
+    }
+
+
 def _check_groq(key: str, td: dict | None = None) -> dict:
     # Groq runs behind Cloudflare which blocks Python-urllib UA from Docker
     code, body, _ = _http_get(
@@ -889,8 +926,9 @@ _TOKEN_DEFS = [
     {"id": "gemini",    "name": "Gemini",    "env_var": "GEMINI_API_KEY",     "fn": _check_gemini},
     {"id": "openai",    "name": "OpenAI",    "env_var": "OPENAI_API_KEY",     "fn": _check_openai},
     {"id": "deepseek",  "name": "DeepSeek",  "env_var": "DEEPSEEK_API_KEY",   "fn": _check_deepseek},
-    {"id": "cloudflare","name": "Cloudflare AI","env_var": "CLOUDFLARE_API_TOKEN","fn": _check_cloudflare},
-    {"id": "groq",      "name": "Groq",      "env_var": "GROQ_API_KEY",       "fn": _check_groq},
+    {"id": "cloudflare",   "name": "Cloudflare AI",  "env_var": "CLOUDFLARE_API_TOKEN",  "fn": _check_cloudflare},
+    {"id": "huggingface",  "name": "Hugging Face",   "env_var": "HUGGINGFACE_TOKEN",      "fn": _check_huggingface},
+    {"id": "groq",         "name": "Groq",           "env_var": "GROQ_API_KEY",           "fn": _check_groq},
     {"id": "tavily",    "name": "Tavily",    "env_var": "TAVILY_API_KEY",     "fn": _check_tavily},
 ]
 
