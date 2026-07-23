@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.10] - 2026-07-23
+
+### Added
+- **Hugging Face token validator** — validates via `GET /api/whoami-v2`;
+  shows username, plan (Free / PRO), token display name and permission
+  scopes (fine-grained list or role name for full-access tokens).
+  Configured via `HUGGINGFACE_TOKEN` environment variable.
+
 ## [0.3.9] - 2026-07-23
 
 ### Fixed
@@ -272,7 +280,8 @@ Initial release.
 - 57 unit tests covering helpers, token validators and the persistence layer.
 - Anonymized dashboard screenshots in the documentation.
 
-[Unreleased]: https://github.com/kozliatko/dboard/compare/v0.3.9...HEAD
+[Unreleased]: https://github.com/kozliatko/dboard/compare/v0.3.10...HEAD
+[0.3.10]: https://github.com/kozliatko/dboard/compare/v0.3.9...v0.3.10
 [0.3.9]: https://github.com/kozliatko/dboard/compare/v0.3.8...v0.3.9
 [0.3.8]: https://github.com/kozliatko/dboard/compare/v0.3.7...v0.3.8
 [0.3.7]: https://github.com/kozliatko/dboard/compare/v0.3.6...v0.3.7
