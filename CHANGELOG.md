@@ -7,11 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.9] - 2026-07-23
+
 ### Fixed
+- **Labeled tokens not reaching the container** — `docker-compose.yml` and
+  `docker-compose.demo.yml` enumerated each token env var explicitly, so
+  `__label` variants (e.g. `CLOUDFLARE_API_TOKEN__snet`) were silently dropped
+  and never passed to the container. Replaced the explicit list with
+  `env_file: .env`; all variables in `.env` are now passed automatically.
+  Infrastructure vars (`DOCKER_HOST`, `NO_PROXY`) remain in `environment:` and
+  continue to take precedence.
 - **Paired env vars respect the `__label` suffix** — `CLOUDFLARE_ACCOUNT_ID__label`
-  and `GITLAB_HOST__label` are now resolved per-instance when multiple tokens of
-  the same type are configured. Previously all labeled Cloudflare / GitLab tokens
-  shared the single base companion var.
+  and `GITLAB_HOST__label` are now resolved per-instance. Previously all labeled
+  Cloudflare / GitLab tokens shared the single base companion var, causing the
+  wrong account ID / host to be used.
 
 ## [0.3.8] - 2026-07-23
 
@@ -263,7 +272,8 @@ Initial release.
 - 57 unit tests covering helpers, token validators and the persistence layer.
 - Anonymized dashboard screenshots in the documentation.
 
-[Unreleased]: https://github.com/kozliatko/dboard/compare/v0.3.8...HEAD
+[Unreleased]: https://github.com/kozliatko/dboard/compare/v0.3.9...HEAD
+[0.3.9]: https://github.com/kozliatko/dboard/compare/v0.3.8...v0.3.9
 [0.3.8]: https://github.com/kozliatko/dboard/compare/v0.3.7...v0.3.8
 [0.3.7]: https://github.com/kozliatko/dboard/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/kozliatko/dboard/compare/v0.3.5...v0.3.6
