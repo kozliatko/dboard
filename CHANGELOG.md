@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.8] - 2026-07-23
+
+### Added
+- **Multiple tokens of the same type** — append a double-underscore label to
+  any token env var to monitor several accounts/keys side by side, e.g.
+  `ANTHROPIC_API_KEY__work` and `ANTHROPIC_API_KEY__personal` appear as
+  separate cards "Anthropic (work)" and "Anthropic (personal)". The plain
+  env var continues to work unchanged; all existing setups require no
+  migration. Documented in `.env.example`.
+
 ## [0.3.7] - 2026-07-23
 
 ### Added
@@ -247,7 +257,8 @@ Initial release.
 - 57 unit tests covering helpers, token validators and the persistence layer.
 - Anonymized dashboard screenshots in the documentation.
 
-[Unreleased]: https://github.com/kozliatko/dboard/compare/v0.3.7...HEAD
+[Unreleased]: https://github.com/kozliatko/dboard/compare/v0.3.8...HEAD
+[0.3.8]: https://github.com/kozliatko/dboard/compare/v0.3.7...v0.3.8
 [0.3.7]: https://github.com/kozliatko/dboard/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/kozliatko/dboard/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/kozliatko/dboard/compare/v0.3.4...v0.3.5
