@@ -880,6 +880,35 @@ _TOKEN_DEFS = [
     {"id": "tavily",    "name": "Tavily",    "env_var": "TAVILY_API_KEY",     "fn": _check_tavily},
 ]
 
+
+def _expand_token_defs() -> list[dict]:
+    """Return one entry per configured token instance.
+
+    For each base definition the canonical env var is checked first, then
+    every var of the form BASE_VAR__label (double-underscore + arbitrary
+    label).  This lets users monitor multiple tokens of the same type by
+    setting e.g. ANTHROPIC_API_KEY__work and ANTHROPIC_API_KEY__personal
+    alongside the plain ANTHROPIC_API_KEY.
+    """
+    expanded: list[dict] = []
+    for td in _TOKEN_DEFS:
+        base_var = td["env_var"]
+        expanded.append({**td})
+        prefix = base_var + "__"
+        for env_key in sorted(os.environ):
+            if env_key.startswith(prefix):
+                label = env_key[len(prefix):]
+                expanded.append({
+                    **td,
+                    "id": f"{td['id']}__{label}",
+                    "name": f"{td['name']} ({label})",
+                    "env_var": env_key,
+                })
+    return expanded
+
+
+_ACTIVE_TOKEN_DEFS = _expand_token_defs()
+
 _TOKEN_CACHE: dict = {}
 _TOKEN_CACHE_TTL = 300  # 5 minutes
 
@@ -937,7 +966,7 @@ def _check_token_sync(td: dict) -> dict:
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
-    tokens_configured = any(os.environ.get(td["env_var"], "").strip() for td in _TOKEN_DEFS)
+    tokens_configured = any(os.environ.get(td["env_var"], "").strip() for td in _ACTIVE_TOKEN_DEFS)
     return templates.TemplateResponse(request, "index.html", {
         "version": _VERSION,
         "git_commit": _GIT_COMMIT,
@@ -1083,7 +1112,7 @@ async def api_tokens(refresh: bool = False):
     results = []
     to_check = []
 
-    for td in _TOKEN_DEFS:
+    for td in _ACTIVE_TOKEN_DEFS:
         cached = _TOKEN_CACHE.get(td["id"])
         if not refresh and cached and (now - cached["_t"]) < _TOKEN_CACHE_TTL:
             results.append({k: v for k, v in cached.items() if k != "_t"})
@@ -1099,7 +1128,7 @@ async def api_tokens(refresh: bool = False):
             _TOKEN_CACHE[r["id"]] = {**r, "_t": now}
             results.append(r)
 
-    order = {td["id"]: i for i, td in enumerate(_TOKEN_DEFS)}
+    order = {td["id"]: i for i, td in enumerate(_ACTIVE_TOKEN_DEFS)}
     results.sort(key=lambda r: order.get(r["id"], 99))
     return {"tokens": results, "cache_ttl": _TOKEN_CACHE_TTL}
 
