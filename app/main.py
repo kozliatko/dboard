@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import json
 import logging
 import mimetypes
@@ -821,6 +822,94 @@ def _check_cloudflare(key: str, td: dict | None = None) -> dict:
     }
 
 
+def _check_gcp(key: str, td: dict | None = None) -> dict:
+    # key is either raw JSON or base64-encoded JSON of a service account key file
+    try:
+        try:
+            creds = json.loads(key)
+        except json.JSONDecodeError:
+            creds = json.loads(base64.b64decode(key + "==").decode())
+    except Exception:
+        return {"valid": False, "detail": "cannot parse key (expected JSON or base64-encoded JSON)"}
+
+    if creds.get("type") != "service_account":
+        return {"valid": False, "detail": f"unsupported key type: {creds.get('type')}"}
+
+    client_email = creds.get("client_email", "")
+    project_id = creds.get("project_id", "")
+    private_key = creds.get("private_key", "")
+    token_uri = creds.get("token_uri", "https://oauth2.googleapis.com/token")
+
+    if not (client_email and private_key):
+        return {"valid": False, "detail": "missing client_email or private_key"}
+
+    try:
+        import jwt as _jwt
+        now = int(time.time())
+        assertion = _jwt.encode(
+            {
+                "iss": client_email,
+                "scope": "https://www.googleapis.com/auth/cloud-platform.read-only",
+                "aud": token_uri,
+                "iat": now,
+                "exp": now + 3600,
+            },
+            private_key,
+            algorithm="RS256",
+        )
+    except Exception as e:
+        return {"valid": False, "detail": f"JWT signing failed: {e}"}
+
+    payload = f"grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion={assertion}"
+    data = payload.encode()
+    req = urllib.request.Request(
+        token_uri,
+        data=data,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            tok = json.loads(r.read().decode())
+    except urllib.error.HTTPError as e:
+        err = json.loads(e.read().decode()).get("error_description", f"HTTP {e.code}")
+        return {"valid": False, "detail": err}
+    except Exception as e:
+        return {"valid": False, "detail": str(e)}
+
+    access_token = tok.get("access_token", "")
+    if not access_token:
+        return {"valid": False, "detail": tok.get("error_description", "no access_token")}
+
+    # Fetch project metadata to confirm the token actually works
+    code, body, _ = _http_get(
+        f"https://cloudresourcemanager.googleapis.com/v1/projects/{project_id}",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    if code == 200:
+        proj = json.loads(body)
+        proj_name = proj.get("name", project_id)
+        proj_num = proj.get("projectNumber", "")
+        lifecycle = proj.get("lifecycleState", "")
+    else:
+        proj_name = project_id
+        proj_num = ""
+        lifecycle = ""
+
+    key_id = creds.get("private_key_id", "")
+    return {
+        "valid": True,
+        "detail": project_id,
+        "extras": _extras(
+            ("Project", proj_name),
+            ("Project #", proj_num),
+            ("State", lifecycle),
+            ("Account", client_email),
+            ("Key ID", f"{key_id[:8]}…" if key_id else ""),
+        ),
+    }
+
+
 def _check_huggingface(key: str, td: dict | None = None) -> dict:
     code, body, _ = _http_get(
         "https://huggingface.co/api/whoami-v2",
@@ -927,6 +1016,7 @@ _TOKEN_DEFS = [
     {"id": "openai",    "name": "OpenAI",    "env_var": "OPENAI_API_KEY",     "fn": _check_openai},
     {"id": "deepseek",  "name": "DeepSeek",  "env_var": "DEEPSEEK_API_KEY",   "fn": _check_deepseek},
     {"id": "cloudflare",   "name": "Cloudflare AI",  "env_var": "CLOUDFLARE_API_TOKEN",  "fn": _check_cloudflare},
+    {"id": "gcp",          "name": "Google Cloud",   "env_var": "GOOGLE_CREDENTIALS_JSON","fn": _check_gcp},
     {"id": "huggingface",  "name": "Hugging Face",   "env_var": "HUGGINGFACE_TOKEN",      "fn": _check_huggingface},
     {"id": "groq",         "name": "Groq",           "env_var": "GROQ_API_KEY",           "fn": _check_groq},
     {"id": "tavily",    "name": "Tavily",    "env_var": "TAVILY_API_KEY",     "fn": _check_tavily},
