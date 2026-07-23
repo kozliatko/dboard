@@ -729,6 +729,36 @@ def _check_tavily(key: str) -> dict:
         return {"valid": False, "detail": str(e)}
 
 
+def _check_cloudflare(key: str) -> dict:
+    account_id = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
+    if not account_id:
+        return {"valid": False, "detail": "CLOUDFLARE_ACCOUNT_ID not set"}
+    code, body, _ = _http_get(
+        f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/models/search",
+        headers={"Authorization": f"Bearer {key}"},
+    )
+    if code != 200:
+        return {"valid": False, "detail": f"HTTP {code}"}
+    data = json.loads(body)
+    if not data.get("success"):
+        errs = data.get("errors", [])
+        return {"valid": False, "detail": errs[0].get("message", "error") if errs else "error"}
+    models = data.get("result", [])
+    tasks: dict[str, int] = {}
+    for m in models:
+        t = m.get("task", {}).get("name", "other")
+        tasks[t] = tasks.get(t, 0) + 1
+    top = ", ".join(f"{t} ({c})" for t, c in sorted(tasks.items(), key=lambda x: -x[1])[:3])
+    return {
+        "valid": True,
+        "detail": f"{len(models)} models",
+        "extras": _extras(
+            ("Models", str(len(models))),
+            ("Tasks", top),
+        ),
+    }
+
+
 def _check_groq(key: str) -> dict:
     # Groq runs behind Cloudflare which blocks Python-urllib UA from Docker
     code, body, _ = _http_get(
@@ -797,6 +827,7 @@ _TOKEN_DEFS = [
     {"id": "gemini",    "name": "Gemini",    "env_var": "GEMINI_API_KEY",     "fn": _check_gemini},
     {"id": "openai",    "name": "OpenAI",    "env_var": "OPENAI_API_KEY",     "fn": _check_openai},
     {"id": "deepseek",  "name": "DeepSeek",  "env_var": "DEEPSEEK_API_KEY",   "fn": _check_deepseek},
+    {"id": "cloudflare","name": "Cloudflare AI","env_var": "CLOUDFLARE_API_TOKEN","fn": _check_cloudflare},
     {"id": "groq",      "name": "Groq",      "env_var": "GROQ_API_KEY",       "fn": _check_groq},
     {"id": "tavily",    "name": "Tavily",    "env_var": "TAVILY_API_KEY",     "fn": _check_tavily},
 ]
