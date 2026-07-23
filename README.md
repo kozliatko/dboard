@@ -140,12 +140,36 @@ All variables are optional. Leave any blank to disable that token check.
 | `GEMINI_API_KEY` | Google Gemini API key |
 | `OPENAI_API_KEY` | OpenAI API key |
 | `DEEPSEEK_API_KEY` | DeepSeek API key |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare API token |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID (required alongside `CLOUDFLARE_API_TOKEN`) |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API token (needs **Workers AI: Read** + optionally **Account Analytics: Read** for neuron stats) |
 | `GROQ_API_KEY` | Groq API key |
 | `TAVILY_API_KEY` | Tavily search API key |
 
 Copy `.env.example` to `.env` and populate the keys you want validated.
+
+#### Multiple tokens of the same type
+
+Append a double-underscore label to any token env var to monitor several accounts or keys side by side. Each labeled instance appears as its own card in the Tokens tab.
+
+```env
+# Two Anthropic keys
+ANTHROPIC_API_KEY=sk-ant-...           # → "Anthropic"
+ANTHROPIC_API_KEY__work=sk-ant-...     # → "Anthropic (work)"
+
+# Two GitLab instances — the companion GITLAB_HOST also takes the label
+GITLAB_TOKEN=glpat-...                 # → "GitLab"
+GITLAB_HOST=gitlab.com
+GITLAB_TOKEN__internal=glpat-...       # → "GitLab (internal)"
+GITLAB_HOST__internal=gitlab.example.com
+
+# Two Cloudflare accounts — CLOUDFLARE_ACCOUNT_ID also takes the label
+CLOUDFLARE_API_TOKEN=cfuat_...         # → "Cloudflare AI"
+CLOUDFLARE_ACCOUNT_ID=abc123
+CLOUDFLARE_API_TOKEN__eu=cfuat_...     # → "Cloudflare AI (eu)"
+CLOUDFLARE_ACCOUNT_ID__eu=def456
+```
+
+The plain env vars (without label) continue to work unchanged — existing setups require no migration.
 
 ### Volumes
 
@@ -294,7 +318,7 @@ Each card shows:
   - **Gemini** — model count, Gemini model names
   - **OpenAI** — model count, GPT model names
   - **DeepSeek** — model names, account balance
-  - **Cloudflare AI** — model count, top task categories (Text Generation, Text-to-Image, …)
+  - **Cloudflare AI** — model count, top task categories; daily neuron usage and remaining free-tier quota (requires **Account Analytics: Read** permission on the token; omitted silently if absent)
   - **Groq** — model count, Llama model names
   - **Tavily** — search API response time
 

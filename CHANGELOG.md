@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Paired env vars respect the `__label` suffix** — `CLOUDFLARE_ACCOUNT_ID__label`
+  and `GITLAB_HOST__label` are now resolved per-instance when multiple tokens of
+  the same type are configured. Previously all labeled Cloudflare / GitLab tokens
+  shared the single base companion var.
+
 ## [0.3.8] - 2026-07-23
 
 ### Added
