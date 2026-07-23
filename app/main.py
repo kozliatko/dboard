@@ -600,7 +600,21 @@ def _extras(*pairs) -> list[dict]:
     return [{"label": l, "value": v} for l, v in pairs if v not in (None, "", [])]
 
 
-def _check_anthropic(key: str) -> dict:
+def _companion_env(td: dict, base_var: str, default: str = "") -> str:
+    """Return the value of a companion env var, preferring the __label variant.
+
+    When td was expanded from BASE_VAR__label, looks for BASE_COMPANION__label
+    first, then falls back to BASE_COMPANION.
+    """
+    label = td.get("_label")
+    if label:
+        val = os.environ.get(f"{base_var}__{label}", "").strip()
+        if val:
+            return val
+    return os.environ.get(base_var, default).strip()
+
+
+def _check_anthropic(key: str, td: dict | None = None) -> dict:
     gh = {"x-api-key": key, "anthropic-version": "2023-06-01"}
     code, body, hdrs = _http_get("https://api.anthropic.com/v1/models", headers=gh)
     if code != 200:
@@ -619,7 +633,7 @@ def _check_anthropic(key: str) -> dict:
     }
 
 
-def _check_github(key: str) -> dict:
+def _check_github(key: str, td: dict | None = None) -> dict:
     gh_hdrs = {
         "Authorization": f"Bearer {key}",
         "Accept": "application/vnd.github+json",
@@ -651,7 +665,7 @@ def _check_github(key: str) -> dict:
     }
 
 
-def _check_gemini(key: str) -> dict:
+def _check_gemini(key: str, td: dict | None = None) -> dict:
     code, body, _ = _http_get(
         f"https://generativelanguage.googleapis.com/v1/models?key={key}"
     )
@@ -672,7 +686,7 @@ def _check_gemini(key: str) -> dict:
     }
 
 
-def _check_openai(key: str) -> dict:
+def _check_openai(key: str, td: dict | None = None) -> dict:
     code, body, _ = _http_get(
         "https://api.openai.com/v1/models",
         headers={"Authorization": f"Bearer {key}"},
@@ -691,7 +705,7 @@ def _check_openai(key: str) -> dict:
     }
 
 
-def _check_deepseek(key: str) -> dict:
+def _check_deepseek(key: str, td: dict | None = None) -> dict:
     ds_hdrs = {"Authorization": f"Bearer {key}"}
     code, body, _ = _http_get("https://api.deepseek.com/models", headers=ds_hdrs)
     if code != 200:
@@ -717,7 +731,7 @@ def _check_deepseek(key: str) -> dict:
     }
 
 
-def _check_tavily(key: str) -> dict:
+def _check_tavily(key: str, td: dict | None = None) -> dict:
     data = json.dumps({"api_key": key, "query": "ping", "max_results": 1}).encode()
     req = urllib.request.Request(
         "https://api.tavily.com/search",
@@ -741,8 +755,8 @@ def _check_tavily(key: str) -> dict:
         return {"valid": False, "detail": str(e)}
 
 
-def _check_cloudflare(key: str) -> dict:
-    account_id = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
+def _check_cloudflare(key: str, td: dict | None = None) -> dict:
+    account_id = _companion_env(td or {}, "CLOUDFLARE_ACCOUNT_ID") if td else os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
     if not account_id:
         return {"valid": False, "detail": "CLOUDFLARE_ACCOUNT_ID not set"}
     code, body, _ = _http_get(
@@ -807,7 +821,7 @@ def _check_cloudflare(key: str) -> dict:
     }
 
 
-def _check_groq(key: str) -> dict:
+def _check_groq(key: str, td: dict | None = None) -> dict:
     # Groq runs behind Cloudflare which blocks Python-urllib UA from Docker
     code, body, _ = _http_get(
         "https://api.groq.com/openai/v1/models",
@@ -827,8 +841,8 @@ def _check_groq(key: str) -> dict:
     }
 
 
-def _check_gitlab(key: str) -> dict:
-    host = os.environ.get("GITLAB_HOST", "gitlab.com").strip().rstrip("/")
+def _check_gitlab(key: str, td: dict | None = None) -> dict:
+    host = (_companion_env(td, "GITLAB_HOST", "gitlab.com") if td else os.environ.get("GITLAB_HOST", "gitlab.com")).strip().rstrip("/")
     base = f"https://{host}/api/v4"
     hdrs = {"PRIVATE-TOKEN": key}
 
@@ -893,7 +907,7 @@ def _expand_token_defs() -> list[dict]:
     expanded: list[dict] = []
     for td in _TOKEN_DEFS:
         base_var = td["env_var"]
-        expanded.append({**td})
+        expanded.append({**td, "_label": None})
         prefix = base_var + "__"
         for env_key in sorted(os.environ):
             if env_key.startswith(prefix):
@@ -903,6 +917,7 @@ def _expand_token_defs() -> list[dict]:
                     "id": f"{td['id']}__{label}",
                     "name": f"{td['name']} ({label})",
                     "env_var": env_key,
+                    "_label": label,
                 })
     return expanded
 
@@ -939,7 +954,7 @@ def _check_token_sync(td: dict) -> dict:
     if not key:
         return {**base, "configured": False, "valid": None, "detail": None, "extras": [], "checked_at": None, "error": None}
     try:
-        result = td["fn"](key)
+        result = td["fn"](key, td)
         return {
             **base,
             "configured": True,
