@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-07-23
+
+### Added
+- **Cloudflare AI token validator** — validates via
+  `GET /accounts/{id}/ai/models/search`; shows total model count and top 3
+  task categories (Text Generation, Text-to-Image, Text Embeddings, …).
+  Requires two env vars: `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`.
+
 ## [0.3.5] - 2026-07-22
 
 ### Fixed
@@ -228,7 +236,8 @@ Initial release.
 - 57 unit tests covering helpers, token validators and the persistence layer.
 - Anonymized dashboard screenshots in the documentation.
 
-[Unreleased]: https://github.com/kozliatko/dboard/compare/v0.3.5...HEAD
+[Unreleased]: https://github.com/kozliatko/dboard/compare/v0.3.6...HEAD
+[0.3.6]: https://github.com/kozliatko/dboard/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/kozliatko/dboard/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/kozliatko/dboard/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/kozliatko/dboard/compare/v0.3.2...v0.3.3

@@ -140,6 +140,8 @@ All variables are optional. Leave any blank to disable that token check.
 | `GEMINI_API_KEY` | Google Gemini API key |
 | `OPENAI_API_KEY` | OpenAI API key |
 | `DEEPSEEK_API_KEY` | DeepSeek API key |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API token |
 | `GROQ_API_KEY` | Groq API key |
 | `TAVILY_API_KEY` | Tavily search API key |
 
@@ -292,6 +294,7 @@ Each card shows:
   - **Gemini** — model count, Gemini model names
   - **OpenAI** — model count, GPT model names
   - **DeepSeek** — model names, account balance
+  - **Cloudflare AI** — model count, top task categories (Text Generation, Text-to-Image, …)
   - **Groq** — model count, Llama model names
   - **Tavily** — search API response time
 
