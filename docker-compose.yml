@@ -38,24 +38,13 @@ services:
     networks:
       - default
       - caddy
+    env_file:
+      - .env
     environment:
-      # Talk to the Docker API through the read-only proxy, never the raw socket
+      # These override anything in .env — infrastructure vars with fixed defaults.
       DOCKER_HOST: tcp://socket-proxy:2375
       NO_PROXY: "socket-proxy,localhost,127.0.0.1"
       no_proxy: "socket-proxy,localhost,127.0.0.1"
-      # Background sampling cadence in seconds (0 = on-demand only, no idle load)
-      SAMPLE_INTERVAL: ${SAMPLE_INTERVAL:-30}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
-      CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID:-}
-      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
-      GROQ_API_KEY: ${GROQ_API_KEY:-}
-      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
-      GITLAB_TOKEN: ${GITLAB_TOKEN:-}
-      GITLAB_HOST: ${GITLAB_HOST:-}
     volumes:
       # Narrow host mounts for disk stats only — NOT the whole root filesystem.
       # /etc, /root, /home and SSH keys are never exposed to the container.
