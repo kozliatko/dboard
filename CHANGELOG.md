@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.12] - 2026-07-24
+
+### Fixed
+- `PyJWT[crypto]` added to `requirements.txt` — the library was available
+  on the host as a transitive dependency but not installed inside the Docker
+  image, causing `No module named 'jwt'` when validating Google Cloud
+  service account keys.
+
 ## [0.3.11] - 2026-07-23
 
 ### Added
@@ -290,7 +298,8 @@ Initial release.
 - 57 unit tests covering helpers, token validators and the persistence layer.
 - Anonymized dashboard screenshots in the documentation.
 
-[Unreleased]: https://github.com/kozliatko/dboard/compare/v0.3.11...HEAD
+[Unreleased]: https://github.com/kozliatko/dboard/compare/v0.3.12...HEAD
+[0.3.12]: https://github.com/kozliatko/dboard/compare/v0.3.11...v0.3.12
 [0.3.11]: https://github.com/kozliatko/dboard/compare/v0.3.10...v0.3.11
 [0.3.10]: https://github.com/kozliatko/dboard/compare/v0.3.9...v0.3.10
 [0.3.9]: https://github.com/kozliatko/dboard/compare/v0.3.8...v0.3.9
