@@ -40,7 +40,7 @@ Monitors containers, host system metrics, and API token validity — all in one 
 - **Container detail overlay** — click any row for a larger view: live CPU, memory and network-rate area charts with a time axis, a selectable range (live / 1h / 6h / 24h, from SQLite history), plus metadata
 - **System panel** — live CPU, RAM, swap, disk, network I/O, disk I/O rates with SVG sparklines and visual thresholds (warn/crit); click any card for a detail overlay with larger charts and a selectable range (live / 1h / 6h / 24h)
 - **API token validation** — checks key validity without exposing the raw key value; shows service metadata (rate limits, model lists, account info)
-- **SQLite persistence** — sparkline history survives restarts; 24-hour retention; optional background sampling records history even when no dashboard is open
+- **SQLite persistence** — sparkline history survives restarts; configurable retention (default 24 h, up to 7 days or more); optional background sampling records history even when no dashboard is open
 - **Hardened by default** — read-only Docker API proxy, non-root container, HTTP Basic Auth, strict CSP, no third-party runtime JS
 - **Installable PWA** — app-shell service worker; the UI loads instantly and works offline, while metrics are always fetched live
 - **HEALTHCHECK** — built-in Docker healthcheck on `/`
@@ -133,6 +133,7 @@ All variables are optional. Leave any blank to disable that token check.
 | Variable | Description |
 |---|---|
 | `SAMPLE_INTERVAL` | Background metrics sampling cadence in seconds. `30` (default) records history continuously even with no dashboard open; `0` samples on demand only (no idle load). |
+| `RETENTION_HOURS` | How many hours of metric history to keep in SQLite. Default `24` (≈5–6 MB for 25 containers). Set to `168` for 7-day retention (≈38 MB). Graph range selectors (10m / 1h / 6h / 24h / 3d / 7d) adapt automatically — only ranges up to the configured retention are shown. |
 | `ANTHROPIC_API_KEY` | Anthropic API key |
 | `GITHUB_TOKEN` | GitHub personal access token |
 | `GITLAB_TOKEN` | GitLab personal access token |

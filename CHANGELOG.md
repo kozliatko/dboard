@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Configurable metric retention** — `RETENTION_HOURS` env var controls how
+  long SQLite keeps metric history (default `24`; set to e.g. `168` for 7 days).
+  At 25 containers and the default 30 s sampling interval, 24 h ≈ 5–6 MB and
+  7 days ≈ 38 MB.
+- **Adaptive graph range selectors** — the 10m / 1h / 6h / 24h / 3d / 7d
+  buttons in the stacked chart and container/system detail overlays are now
+  generated dynamically: only ranges that fit within the configured retention
+  are shown. Frontend reads `retention_seconds` from `/api/containers`.
+
 ## [0.3.13] - 2026-07-27
 
 ### Added
