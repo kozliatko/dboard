@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.13] - 2026-07-27
+
+### Added
+- **Color-coded group dots** — each container row shows a small coloured dot
+  next to its name. The colour is derived deterministically from the group
+  name (same group always gets the same hue). Hovering the dot shows the
+  group name as a tooltip.
+- **Automatic grouping** from the `com.docker.compose.project` label — no
+  configuration needed; Docker Compose sets this label on every container it
+  manages.
+- **Custom groups** via the `dboard.group` label — override or supplement
+  the compose project grouping for containers that belong to the same logical
+  service but live in different compose stacks.
+- **Group-aware sorting** — both the Proxied and Others tables sort by group
+  first, then by container name, so members of the same project cluster
+  together visually.
+
 ## [0.3.12] - 2026-07-24
 
 ### Fixed
@@ -298,7 +315,8 @@ Initial release.
 - 57 unit tests covering helpers, token validators and the persistence layer.
 - Anonymized dashboard screenshots in the documentation.
 
-[Unreleased]: https://github.com/kozliatko/dboard/compare/v0.3.12...HEAD
+[Unreleased]: https://github.com/kozliatko/dboard/compare/v0.3.13...HEAD
+[0.3.13]: https://github.com/kozliatko/dboard/compare/v0.3.12...v0.3.13
 [0.3.12]: https://github.com/kozliatko/dboard/compare/v0.3.11...v0.3.12
 [0.3.11]: https://github.com/kozliatko/dboard/compare/v0.3.10...v0.3.11
 [0.3.10]: https://github.com/kozliatko/dboard/compare/v0.3.9...v0.3.10

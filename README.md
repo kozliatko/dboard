@@ -277,6 +277,28 @@ Both tables support:
 - **Filter** by name, image, status, health, or domain
 - **Per-row color coding** — orange left border at ≥75% resource usage, red background at ≥90%
 - **Sparklines** in CPU and RAM columns (last ~100 s of history)
+- **Group dots** — a small colored dot before each container name indicates its group; containers are sorted by group, then by name
+
+#### Container grouping
+
+Containers from the same `docker compose` project are automatically grouped using the `com.docker.compose.project` label that Docker Compose attaches to every managed container. Each project gets a unique deterministic color — same project, same color across restarts.
+
+To override or assign a custom group, add a `dboard.group` label to any container:
+
+```yaml
+services:
+  api:
+    image: myapp:latest
+    labels:
+      dboard.group: my-stack
+
+  worker:
+    image: myapp-worker:latest
+    labels:
+      dboard.group: my-stack
+```
+
+Priority: `dboard.group` > `com.docker.compose.project` > no group (no dot).
 
 ### System
 
