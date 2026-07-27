@@ -337,7 +337,7 @@ _container_io_prev: dict[str, dict] = {}
 # ── Persistence (SQLite) ──────────────────────────────────────────────────────
 
 DB_PATH = "/app/data/metrics.db"
-_DB_RETENTION = 86400  # 24 h
+_DB_RETENTION = int(os.getenv("RETENTION_HOURS", "24")) * 3600
 _db_lock = threading.Lock()
 _db_conn: sqlite3.Connection | None = None
 
@@ -1405,5 +1405,6 @@ async def _collect_containers() -> dict:
         "running_proxied": sum(1 for p in proxied if p["status"] == "running"),
         "running_others": sum(1 for p in others if p["status"] == "running"),
         "sample_interval": SAMPLE_INTERVAL or 5,
+        "retention_seconds": _DB_RETENTION,
         "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }

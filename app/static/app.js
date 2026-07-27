@@ -334,6 +334,10 @@
 
   const rawData = { proxied: [], others: [] };
   let sampleInterval = 5;   // seconds between samples (from the API)
+  let retentionSecs = 86400;  // updated from API on first load
+
+  const ALL_TIME_RANGES = [[600,'10m'],[3600,'1h'],[21600,'6h'],[86400,'24h'],[259200,'3d'],[604800,'7d']];
+  function availableTimeRanges() { return ALL_TIME_RANGES.filter(([s]) => s <= retentionSecs); }
   let lastSys = null;       // latest /api/system payload (for the system overlay)
   const sortState = {
     proxied: { col: null, dir: 1 },
@@ -602,7 +606,7 @@
   }
 
   function rangeSelector() {
-    const ranges = [['live', 'live'], ['3600', '1h'], ['21600', '6h'], ['86400', '24h']];
+    const ranges = [['live', 'live'], ...availableTimeRanges().map(([s, l]) => [String(s), l])];
     return `<div class="ov-ranges">${ranges.map(([v, l]) =>
       `<button class="ov-range-btn ${String(detailRange) === v ? 'active' : ''}" data-range="${v}">${l}</button>`).join('')}</div>`;
   }
@@ -776,6 +780,18 @@
   let stackMetric = 'cpu';
   let stackRange = 3600;
   let lastStackLoad = 0;
+
+  function buildStackRangeBtns() {
+    const el = document.getElementById('stack-range');
+    if (!el) return;
+    const ranges = availableTimeRanges();
+    // clamp stackRange to max available
+    const maxRange = ranges[ranges.length - 1][0];
+    if (stackRange > maxRange) stackRange = maxRange;
+    el.innerHTML = ranges.map(([s, l]) =>
+      `<button class="seg-btn${s === stackRange ? ' active' : ''}" data-range="${s}">${l}</button>`
+    ).join('');
+  }
   let stackData = null;   // last rendered response (+ _max), for hover
 
   function stackColor(c, ci) { return c.name === 'other' ? '#64748b' : STACK_COLORS[ci % STACK_COLORS.length]; }
@@ -909,6 +925,10 @@
     rawData.proxied = data.proxied || [];
     rawData.others  = data.others  || [];
     if (data.sample_interval) sampleInterval = data.sample_interval;
+    if (data.retention_seconds && data.retention_seconds !== retentionSecs) {
+      retentionSecs = data.retention_seconds;
+      buildStackRangeBtns();
+    }
 
     redraw('proxied');
     redraw('others');
@@ -978,6 +998,9 @@
   // Open the system overlay on any system card click.
   const _sysGrid = document.getElementById('sys-grid');
   if (_sysGrid) _sysGrid.addEventListener('click', () => openSystemDetail());
+
+  // Build stack range buttons with default retention on init; API call will update if different.
+  buildStackRangeBtns();
 
   // Stacked-chart metric / range toggles.
   function _segSelect(group, btn) { group.querySelectorAll('.seg-btn').forEach(x => x.classList.toggle('active', x === btn)); }
