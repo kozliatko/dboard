@@ -2,6 +2,18 @@
   const esc = s => String(s||'').replace(/[&<>"']/g,
     c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+  function groupColor(name) {
+    if (!name) return null;
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff;
+    return `hsl(${h % 360},60%,55%)`;
+  }
+  function groupBadge(group) {
+    if (!group) return '';
+    const color = groupColor(group);
+    return `<span class="grp-dot" style="background:${color}" title="${esc(group)}"></span>`;
+  }
+
   const STATUSES = ['running','exited','paused','restarting','dead'];
 
   // ── Tabs ────────────────────────────────────────────────────────────────────
@@ -90,13 +102,14 @@
 
   function renderProxied(rows) {
     if (!rows.length) return '<tr class="empty-row"><td colspan="9">No matching containers</td></tr>';
+    rows = [...rows].sort((a,b) => (a.group||'').localeCompare(b.group||'') || a.name.localeCompare(b.name));
     return rows.map(c => {
       const chips = (c.domains||[])
         .map(d => `<a href="https://${esc(d)}" target="_blank" class="chip">${esc(d)}</a>`)
         .join('') || '<span class="text-gray-700 text-xs mono">—</span>';
       return `<tr class="${rowLevel(c)} row-click" data-cname="${esc(c.name)}">
         <td>${badge(c.status)}</td>
-        <td><span class="font-semibold text-white text-sm">${esc(c.name)}</span></td>
+        <td>${groupBadge(c.group)}<span class="font-semibold text-white text-sm">${esc(c.name)}</span></td>
         <td style="max-width:260px">${chips}</td>
         <td class="hidden sm:table-cell mono text-xs text-gray-500" style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${esc(c.image)}">${esc(c.image)}</td>
         <td>${healthBadge(c.health)}</td>
@@ -110,9 +123,10 @@
 
   function renderOthers(rows) {
     if (!rows.length) return '<tr class="empty-row"><td colspan="8">No matching containers</td></tr>';
+    rows = [...rows].sort((a,b) => (a.group||'').localeCompare(b.group||'') || a.name.localeCompare(b.name));
     return rows.map(c => `<tr class="${rowLevel(c)} row-click" data-cname="${esc(c.name)}">
       <td>${badge(c.status)}</td>
-      <td><span class="font-semibold text-white text-sm">${esc(c.name)}</span></td>
+      <td>${groupBadge(c.group)}<span class="font-semibold text-white text-sm">${esc(c.name)}</span></td>
       <td class="mono text-xs text-gray-500" style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${esc(c.image)}">${esc(c.image)}</td>
       <td>${healthBadge(c.health)}</td>
       <td>${uptimeBadge(c.uptime)}</td>

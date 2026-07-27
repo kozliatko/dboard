@@ -1313,6 +1313,11 @@ async def _collect_containers() -> dict:
         health = health_obj.get("Status") if health_obj else None
 
         net_settings = c.attrs.get("NetworkSettings", {}).get("Networks", {})
+        group = (
+            labels.get("dboard.group")
+            or labels.get("com.docker.compose.project")
+            or ""
+        )
         entry = {
             "_id": c.id,
             "name": c.name.lstrip("/"),
@@ -1322,6 +1327,7 @@ async def _collect_containers() -> dict:
             "domains": domains,
             "uptime": _uptime(state.get("StartedAt", "")) if c.status == "running" else None,
             "networks": sorted(net_settings.keys()),
+            "group": group,
         }
 
         if has_caddy:
