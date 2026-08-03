@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.14] - 2026-08-03
+
 ### Added
 - **Configurable metric retention** — `RETENTION_HOURS` env var controls how
   long SQLite keeps metric history (default `24`; set to e.g. `168` for 7 days).
@@ -16,6 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   buttons in the stacked chart and container/system detail overlays are now
   generated dynamically: only ranges that fit within the configured retention
   are shown. Frontend reads `retention_seconds` from `/api/containers`.
+
+### Changed
+- **Performance optimisations** — eliminated one Docker API round-trip per
+  running container on every poll (container object reused instead of
+  re-fetched by ID); added short TTL caches for CPU temperature
+  (`sensors_temperatures`, 10 s) and disk usage (`statvfs`, 15 s); SQLite
+  history aggregations cached for 4 s to avoid redundant GROUP BY work between
+  polls; `_busy` flag guards on `refresh()`, `loadStack()` and
+  `refreshTokens()` prevent overlapping concurrent fetches.
 
 ## [0.3.13] - 2026-07-27
 
@@ -325,7 +336,8 @@ Initial release.
 - 57 unit tests covering helpers, token validators and the persistence layer.
 - Anonymized dashboard screenshots in the documentation.
 
-[Unreleased]: https://github.com/kozliatko/dboard/compare/v0.3.13...HEAD
+[Unreleased]: https://github.com/kozliatko/dboard/compare/v0.3.14...HEAD
+[0.3.14]: https://github.com/kozliatko/dboard/compare/v0.3.13...v0.3.14
 [0.3.13]: https://github.com/kozliatko/dboard/compare/v0.3.12...v0.3.13
 [0.3.12]: https://github.com/kozliatko/dboard/compare/v0.3.11...v0.3.12
 [0.3.11]: https://github.com/kozliatko/dboard/compare/v0.3.10...v0.3.11
