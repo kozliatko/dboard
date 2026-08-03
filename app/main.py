@@ -167,15 +167,18 @@ def _extract_domains(labels: dict) -> list[str]:
     return domains
 
 
-def _stats_sync(container_id: str) -> dict:
+def _stats_sync(container) -> dict:
+    """Compute live stats for a `Container` object.
+
+    Takes the already-listed container object (from `containers.list()`) rather
+    than an id, so we skip the redundant `containers.get(id)` round-trip to the
+    Docker API. For N running containers this halves the per-poll network calls
+    (2 → 1 per container).
+    """
     try:
-        d = _dock()
-        if not d:
+        if container.status != "running":
             return {}
-        c = d.containers.get(container_id)
-        if c.status != "running":
-            return {}
-        raw = c.stats(stream=False)
+        raw = container.stats(stream=False)
 
         cpu_delta = (
             raw["cpu_stats"]["cpu_usage"]["total_usage"]
@@ -274,8 +277,19 @@ _DISK_PROBES = [
 ]
 
 
+# Host disk usage (statvfs) is polled on every system sample. Values change
+# slowly, so a short TTL cache removes the repeated syscalls without making the
+# dashboard feel stale.
+_DISK_CACHE: dict = {}
+_DISK_CACHE_TTL = 15.0  # seconds
+
+
 def _host_disks() -> list[dict]:
     """Report usage of the host filesystems exposed via narrow /host/* mounts."""
+    now = time.monotonic()
+    cached = _DISK_CACHE.get("v")
+    if cached is not None and now - _DISK_CACHE.get("t", 0) < _DISK_CACHE_TTL:
+        return cached
     disks = []
     seen_devs: set[int] = set()
     for path, label in _DISK_PROBES:
@@ -299,7 +313,10 @@ def _host_disks() -> list[dict]:
             })
         except Exception:
             pass
-    return sorted(disks, key=lambda d: d["mount"])
+    disks = sorted(disks, key=lambda d: d["mount"])
+    _DISK_CACHE["v"] = disks
+    _DISK_CACHE["t"] = now
+    return disks
 
 
 def _fmt_uptime(secs: int) -> str:
@@ -436,7 +453,8 @@ def _db_prune_sync() -> None:
 def _db_write_sys(ts: int, cpu: float, mem: float, temp, net_rate, disk_rate) -> None:
     try:
         with _db_lock:
-            _db().execute(
+            conn = _db()
+            conn.execute(
                 "INSERT INTO sys_metrics(ts,cpu,mem,temp,net_rx,net_tx,disk_r,disk_w) "
                 "VALUES(?,?,?,?,?,?,?,?)",
                 (ts, cpu, mem, temp,
@@ -445,7 +463,7 @@ def _db_write_sys(ts: int, cpu: float, mem: float, temp, net_rate, disk_rate) ->
                  disk_rate["read_bps"] if disk_rate else None,
                  disk_rate["write_bps"] if disk_rate else None)
             )
-            _db().commit()
+            conn.commit()
     except Exception as e:
         log.warning("DB write sys: %s", e)
 
@@ -465,23 +483,41 @@ def _db_write_containers(entries: list[dict]) -> None:
         log.warning("DB write containers: %s", e)
 
 
+# psutil.sensors_temperatures() walks /sys/devices hwmon entries and can be
+# relatively expensive. Temperature moves slowly, so a short TTL cache avoids
+# re-scanning the sensor tree on every 5 s system sample while staying accurate
+# enough for a dashboard.
+_TEMP_CACHE: dict = {}
+_TEMP_CACHE_TTL = 10.0  # seconds
+
+
 def _cpu_temp() -> float | None:
+    now = time.monotonic()
+    cached = _TEMP_CACHE.get("v")
+    if cached is not None and now - _TEMP_CACHE.get("t", 0) < _TEMP_CACHE_TTL:
+        return cached
     try:
         temps = psutil.sensors_temperatures()
-        if not temps:
-            return None
-        for key in ("coretemp", "k10temp", "cpu_thermal", "acpitz", "it8"):
-            if key in temps:
-                vals = [t.current for t in temps[key] if t.current and t.current > 0]
-                if vals:
-                    return round(max(vals), 1)
-        for readings in temps.values():
-            vals = [t.current for t in readings if t.current and t.current > 0]
-            if vals:
-                return round(max(vals), 1)
+        result = None
+        if temps:
+            for key in ("coretemp", "k10temp", "cpu_thermal", "acpitz", "it8"):
+                if key in temps:
+                    vals = [t.current for t in temps[key] if t.current and t.current > 0]
+                    if vals:
+                        result = round(max(vals), 1)
+                        break
+            if result is None:
+                for readings in temps.values():
+                    vals = [t.current for t in readings if t.current and t.current > 0]
+                    if vals:
+                        result = round(max(vals), 1)
+                        break
     except Exception:
-        pass
-    return None
+        result = None
+    if result is not None:
+        _TEMP_CACHE["v"] = result
+        _TEMP_CACHE["t"] = now
+    return result
 
 
 def _system_stats_sync() -> dict:
@@ -1129,8 +1165,37 @@ async def service_worker():
     )
 
 
+# History / stacked-chart aggregates are recomputed by re-scanning SQLite on
+# every dashboard poll (5 s) even though the DB only gains new rows once per
+# sample interval. A short TTL result cache keyed by (query, args) removes the
+# redundant GROUP BY aggregation work; the cache is naturally invalidated by
+# the TTL, and results are immutable dicts returned to a single client.
+_HIST_CACHE_TTL = 4.0  # seconds — just under the 5 s frontend poll
+_hist_cache: dict = {}
+_hist_cache_lock = threading.Lock()
+
+
+def _hist_cached(key: tuple, fn, *args):
+    """Return fn(*args) from the TTL cache if fresh, otherwise compute + cache."""
+    now = time.monotonic()
+    with _hist_cache_lock:
+        hit = _hist_cache.get(key)
+        if hit is not None and now - hit[0] < _HIST_CACHE_TTL:
+            return hit[1]
+    result = fn(*args)
+    with _hist_cache_lock:
+        _hist_cache[key] = (now, result)
+        if len(_hist_cache) > 512:  # bound memory across many containers/ranges
+            _hist_cache.clear()
+    return result
+
+
 def _history_sync(name: str, rng: int) -> dict:
     """Downsampled container history from SQLite for the last `rng` seconds."""
+    return _hist_cached(("hist", name, rng), _history_sync_uncached, name, rng)
+
+
+def _history_sync_uncached(name: str, rng: int) -> dict:
     target_points = 160
     bucket = max(1, rng // target_points)
     frm = int(time.time()) - rng
@@ -1159,6 +1224,10 @@ async def api_history(name: str, range: int = 3600):
 
 def _system_history_sync(rng: int) -> dict:
     """Downsampled host history from SQLite for the last `rng` seconds."""
+    return _hist_cached(("syshist", rng), _system_history_sync_uncached, rng)
+
+
+def _system_history_sync_uncached(rng: int) -> dict:
     bucket = max(1, rng // 160)
     frm = int(time.time()) - rng
     with _db_lock:
@@ -1191,8 +1260,11 @@ _STACK_EXPR = {"cpu": "avg(cpu)", "mem": "avg(mem_mb)", "net": "avg(net_rx)+avg(
 
 def _stack_sync(metric: str, rng: int) -> dict:
     """Per-container series aligned to common time buckets, for a stacked chart."""
-    if metric not in _STACK_EXPR:
-        metric = "cpu"
+    m = metric if metric in _STACK_EXPR else "cpu"
+    return _hist_cached(("stack", m, rng), _stack_sync_uncached, m, rng)
+
+
+def _stack_sync_uncached(metric: str, rng: int) -> dict:
     bucket = max(1, rng // 120)
     frm = int(time.time()) - rng
     with _db_lock:
@@ -1298,6 +1370,7 @@ async def _collect_containers() -> dict:
 
     proxied = []
     others = []
+    running_objs: list = []  # parallel to the flattened running entries, holds Container objects
 
     for c in all_containers:
         labels = c.labels
@@ -1330,6 +1403,8 @@ async def _collect_containers() -> dict:
             "group": group,
         }
 
+        if c.status == "running":
+            running_objs.append(c)
         if has_caddy:
             proxied.append(entry)
         else:
@@ -1339,7 +1414,7 @@ async def _collect_containers() -> dict:
     if all_running:
         loop = asyncio.get_event_loop()
         results = await asyncio.gather(
-            *[loop.run_in_executor(executor, _stats_sync, p["_id"]) for p in all_running]
+            *[loop.run_in_executor(executor, _stats_sync, obj) for obj in running_objs]
         )
         now = time.monotonic()
         for p, stats in zip(all_running, results):

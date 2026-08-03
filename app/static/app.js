@@ -456,6 +456,8 @@
   }
 
   async function refreshTokens(force = false) {
+    if (refreshTokens._busy) return;   // guard: tokens poll every 30 s shouldn't overlap
+    refreshTokens._busy = true;
     const btn = $('tok-refresh-btn');
     if (btn) btn.disabled = true;
     try {
@@ -464,6 +466,7 @@
     } catch(e) {
       console.error('tokens fetch error', e);
     } finally {
+      refreshTokens._busy = false;
       if (btn) btn.disabled = false;
     }
   }
@@ -841,11 +844,14 @@
   }
 
   async function loadStack() {
+    if (loadStack._busy) return;   // guard against overlap
+    loadStack._busy = true;
     try {
       const r = await xhrJson(`/api/stack?metric=${stackMetric}&range=${stackRange}`);
       renderStack(r);
       lastStackLoad = Date.now();
     } catch (e) { /* keep last render */ }
+    finally { loadStack._busy = false; }
   }
 
   function stackHoverEnd() {
@@ -905,6 +911,8 @@
   }
 
   async function refresh() {
+    if (refresh._busy) return;            // guard: never overlap polls
+    refresh._busy = true;
     let data, sys;
     try {
       [data, sys] = await Promise.all([
@@ -915,6 +923,8 @@
       console.error('dboard fetch error', e);
       showError(e.message);
       return;
+    } finally {
+      refresh._busy = false;
     }
 
     hideError();
