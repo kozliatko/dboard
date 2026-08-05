@@ -1,7 +1,8 @@
 """Tests for API token validator functions in main.py."""
+import base64
 import json
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from main import (
     _check_anthropic,
@@ -11,6 +12,11 @@ from main import (
     _check_deepseek,
     _check_tavily,
     _check_gitlab,
+    _check_huggingface,
+    _check_groq,
+    _check_gcp,
+    _check_token_sync,
+    _expand_token_defs,
 )
 
 FAKE_KEY = "sk-test-key-1234567890"
@@ -229,3 +235,194 @@ class TestCheckGitLab:
         ]), patch.dict("os.environ", {"GITLAB_HOST": "git.example.com"}):
             r = _check_gitlab(FAKE_KEY)
         assert r["valid"] is False
+
+
+# ── HuggingFace ───────────────────────────────────────────────────────────────
+
+class TestCheckHuggingFace:
+    WHOAMI = {
+        "name": "myuser",
+        "fullname": "My User",
+        "isPro": False,
+        "auth": {
+            "accessToken": {
+                "displayName": "my-token",
+                "role": "write",
+            }
+        },
+    }
+
+    def test_valid_token(self):
+        with patch("main._http_get", return_value=(200, json.dumps(self.WHOAMI), {})):
+            r = _check_huggingface(FAKE_KEY)
+        assert r["valid"] is True
+        assert "@myuser" in r["detail"]
+        labels = [e["label"] for e in r["extras"]]
+        assert "Plan" in labels
+        assert "User" in labels
+
+    def test_pro_plan_shown(self):
+        data = {**self.WHOAMI, "isPro": True}
+        with patch("main._http_get", return_value=(200, json.dumps(data), {})):
+            r = _check_huggingface(FAKE_KEY)
+        plan_extra = next(e for e in r["extras"] if e["label"] == "Plan")
+        assert plan_extra["value"] == "PRO"
+
+    def test_fine_grained_permissions(self):
+        data = json.loads(json.dumps(self.WHOAMI))
+        data["auth"]["accessToken"]["role"] = "fineGrained"
+        data["auth"]["accessToken"]["fineGrained"] = {
+            "global": ["read"],
+            "scoped": [{"permissions": ["inference.serverless.write"]}],
+        }
+        with patch("main._http_get", return_value=(200, json.dumps(data), {})):
+            r = _check_huggingface(FAKE_KEY)
+        assert r["valid"] is True
+        perms_extra = next(e for e in r["extras"] if e["label"] == "Permissions")
+        assert "read" in perms_extra["value"]
+
+    def test_invalid_token(self):
+        with patch("main._http_get", return_value=(401, "{}", {})):
+            r = _check_huggingface(FAKE_KEY)
+        assert r["valid"] is False
+
+    def test_api_returns_error_field(self):
+        data = {"error": "Token is expired or revoked"}
+        with patch("main._http_get", return_value=(200, json.dumps(data), {})):
+            r = _check_huggingface(FAKE_KEY)
+        assert r["valid"] is False
+        assert "expired" in r["detail"]
+
+
+# ── Groq ──────────────────────────────────────────────────────────────────────
+
+class TestCheckGroq:
+    MODELS = {"data": [
+        {"id": "llama-3.1-8b-instant"},
+        {"id": "llama-3.1-70b-versatile"},
+        {"id": "mixtral-8x7b-32768"},
+    ]}
+
+    def test_valid_token(self):
+        with patch("main._http_get", return_value=(200, json.dumps(self.MODELS), {})):
+            r = _check_groq(FAKE_KEY)
+        assert r["valid"] is True
+        assert "3 models" in r["detail"]
+
+    def test_llama_models_listed_in_extras(self):
+        with patch("main._http_get", return_value=(200, json.dumps(self.MODELS), {})):
+            r = _check_groq(FAKE_KEY)
+        llama_extra = next(e for e in r["extras"] if e["label"] == "Llama models")
+        assert "llama" in llama_extra["value"].lower()
+
+    def test_invalid_key(self):
+        with patch("main._http_get", return_value=(401, "{}", {})):
+            r = _check_groq(FAKE_KEY)
+        assert r["valid"] is False
+        assert "401" in r["detail"]
+
+
+# ── GCP (early rejection paths) ───────────────────────────────────────────────
+
+class TestCheckGCPEarlyRejections:
+    def test_unparseable_input_rejected(self):
+        r = _check_gcp("this is not json and not valid base64!!!")
+        assert r["valid"] is False
+        assert "cannot parse" in r["detail"]
+
+    def test_wrong_key_type_rejected(self):
+        creds = json.dumps({"type": "user_account"})
+        r = _check_gcp(creds)
+        assert r["valid"] is False
+        assert "user_account" in r["detail"]
+
+    def test_missing_client_email_rejected(self):
+        creds = json.dumps({
+            "type": "service_account",
+            "private_key": "some-key",
+            "client_email": "",
+        })
+        r = _check_gcp(creds)
+        assert r["valid"] is False
+        assert "missing" in r["detail"]
+
+    def test_missing_private_key_rejected(self):
+        creds = json.dumps({
+            "type": "service_account",
+            "client_email": "svc@project.iam.gserviceaccount.com",
+            "private_key": "",
+        })
+        r = _check_gcp(creds)
+        assert r["valid"] is False
+        assert "missing" in r["detail"]
+
+    def test_base64_encoded_json_parsed(self):
+        creds = {"type": "user_account"}
+        b64 = base64.b64encode(json.dumps(creds).encode()).decode()
+        r = _check_gcp(b64)
+        assert r["valid"] is False
+        assert "user_account" in r["detail"]  # parsed correctly, wrong type
+
+
+# ── _check_token_sync ─────────────────────────────────────────────────────────
+
+class TestCheckTokenSync:
+    def test_unconfigured_env_var(self):
+        td = {
+            "id": "test-svc",
+            "name": "Test Service",
+            "env_var": "TEST_SVC_KEY_UNUSED_XYZ_12345",
+            "fn": lambda k, d: {},
+        }
+        result = _check_token_sync(td)
+        assert result["configured"] is False
+        assert result["valid"] is None
+        assert result["key_hint"] is None
+        assert result["extras"] == []
+
+    def test_configured_and_valid(self, monkeypatch):
+        monkeypatch.setenv("TEST_SVC_KEY_FOR_SYNC_ABC", "sk-this-is-a-test-key-abcd")
+        td = {
+            "id": "test-svc",
+            "name": "Test Service",
+            "env_var": "TEST_SVC_KEY_FOR_SYNC_ABC",
+            "fn": lambda k, d: {"valid": True, "detail": "ok", "extras": []},
+        }
+        result = _check_token_sync(td)
+        assert result["configured"] is True
+        assert result["valid"] is True
+        assert result["detail"] == "ok"
+        assert result["key_hint"] is not None
+        assert "···" in result["key_hint"]
+
+    def test_function_exception_is_caught(self, monkeypatch):
+        monkeypatch.setenv("TEST_SVC_KEY_FOR_SYNC_ABC", "sk-this-is-a-test-key-abcd")
+        def boom(k, d): raise RuntimeError("network down")
+        td = {
+            "id": "test-svc",
+            "name": "Test Service",
+            "env_var": "TEST_SVC_KEY_FOR_SYNC_ABC",
+            "fn": boom,
+        }
+        result = _check_token_sync(td)
+        assert result["configured"] is True
+        assert result["valid"] is False
+        assert "network down" in result["error"]
+
+
+# ── _expand_token_defs ────────────────────────────────────────────────────────
+
+class TestExpandTokenDefs:
+    def test_multi_instance_via_double_underscore(self, monkeypatch):
+        monkeypatch.setenv("ANTHROPIC_API_KEY__work", "sk-work")
+        monkeypatch.setenv("ANTHROPIC_API_KEY__personal", "sk-personal")
+        result = _expand_token_defs()
+        ids = [td["id"] for td in result]
+        assert "anthropic__work" in ids
+        assert "anthropic__personal" in ids
+
+    def test_labeled_instance_name_includes_label(self, monkeypatch):
+        monkeypatch.setenv("GITHUB_TOKEN__ci", "ghp-token")
+        result = _expand_token_defs()
+        ci_td = next(td for td in result if td["id"] == "github__ci")
+        assert "ci" in ci_td["name"].lower()
