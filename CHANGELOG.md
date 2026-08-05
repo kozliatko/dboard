@@ -7,15 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.15] - 2026-08-05
+
+### Security
+- **PyJWT upgraded to 2.13.0** — fixes High severity Improper Authentication
+  vulnerability (SNYK-PYTHON-PYJWT-17053408) in PyJWT 2.12.1.
+
 ### Added
-- CodeQL static analysis workflow (`.github/workflows/codeql.yml`), running on every
-  push/PR to `main` and weekly on a schedule.
-- Snyk dependency vulnerability scan added to the existing `scan` job in
-  `build.yml` (`requirements.txt`, fails on high-severity findings).
-- Coverage reporting: `pytest-cov` dev dependency, `--cov=app --cov-report=xml`
-  in the `test` job, and a Codecov upload step.
-- README badges: CodeQL status, Snyk security, Codecov coverage, and latest
-  GitHub release version (alongside the existing Build badge).
+- **CodeQL static analysis** — workflow runs on every push/PR to `main` and
+  weekly on a schedule.
+- **Snyk dependency scan** — added to the existing `scan` job in `build.yml`;
+  fails on high-severity findings in `requirements.txt`.
+- **Coverage reporting** — `pytest-cov` dev dependency, `--cov=app
+  --cov-report=xml` in the `test` job, and a Codecov upload step.
+- **README badges** — CodeQL status, Snyk security, Codecov coverage, and
+  latest GitHub release version.
 
 ## [0.3.14] - 2026-08-03
 
@@ -346,7 +352,8 @@ Initial release.
 - 57 unit tests covering helpers, token validators and the persistence layer.
 - Anonymized dashboard screenshots in the documentation.
 
-[Unreleased]: https://github.com/kozliatko/dboard/compare/v0.3.14...HEAD
+[Unreleased]: https://github.com/kozliatko/dboard/compare/v0.3.15...HEAD
+[0.3.15]: https://github.com/kozliatko/dboard/compare/v0.3.14...v0.3.15
 [0.3.14]: https://github.com/kozliatko/dboard/compare/v0.3.13...v0.3.14
 [0.3.13]: https://github.com/kozliatko/dboard/compare/v0.3.12...v0.3.13
 [0.3.12]: https://github.com/kozliatko/dboard/compare/v0.3.11...v0.3.12
