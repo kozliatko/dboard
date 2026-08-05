@@ -13,3 +13,8 @@ app/static/tailwind.css
 
 # Local virtualenv
 .venv/
+
+# Coverage artifacts
+.coverage
+coverage.xml
+.pytest_cache/

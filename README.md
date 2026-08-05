@@ -4,6 +4,10 @@ A lightweight, self-hosted Docker infrastructure dashboard.
 Monitors containers, host system metrics, and API token validity — all in one place.
 
 [![Build](https://github.com/kozliatko/dboard/actions/workflows/build.yml/badge.svg)](https://github.com/kozliatko/dboard/actions/workflows/build.yml)
+[![CodeQL](https://github.com/kozliatko/dboard/actions/workflows/codeql.yml/badge.svg)](https://github.com/kozliatko/dboard/actions/workflows/codeql.yml)
+[![Snyk security](https://snyk.io/test/github/kozliatko/dboard/badge.svg)](https://snyk.io/test/github/kozliatko/dboard)
+[![codecov](https://codecov.io/gh/kozliatko/dboard/branch/main/graph/badge.svg)](https://codecov.io/gh/kozliatko/dboard)
+![Version](https://img.shields.io/github/v/release/kozliatko/dboard)
 ![Python](https://img.shields.io/badge/python-3.12-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-green)
 ![SQLite](https://img.shields.io/badge/SQLite-WAL-orange)

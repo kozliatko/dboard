@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- CodeQL static analysis workflow (`.github/workflows/codeql.yml`), running on every
+  push/PR to `main` and weekly on a schedule.
+- Snyk dependency vulnerability scan added to the existing `scan` job in
+  `build.yml` (`requirements.txt`, fails on high-severity findings).
+- Coverage reporting: `pytest-cov` dev dependency, `--cov=app --cov-report=xml`
+  in the `test` job, and a Codecov upload step.
+- README badges: CodeQL status, Snyk security, Codecov coverage, and latest
+  GitHub release version (alongside the existing Build badge).
+
 ## [0.3.14] - 2026-08-03
 
 ### Added

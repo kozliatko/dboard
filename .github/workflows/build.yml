@@ -26,7 +26,15 @@ jobs:
         run: pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Run tests
-        run: pytest tests/ -v
+        run: pytest tests/ -v --cov=app --cov-report=xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   scan:
     runs-on: ubuntu-latest
@@ -51,6 +59,13 @@ jobs:
           ignore-unfixed: true
           exit-code: '0'   # report, don't block (flip to 1 to enforce)
           cache: 'false'   # skip the internal (Node 20) actions/cache step
+
+      - name: Snyk dependency vulnerability scan
+        uses: snyk/actions/python-3.10@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --file=requirements.txt --severity-threshold=high
 
   build:
     needs: [test, scan]
