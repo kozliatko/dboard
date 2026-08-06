@@ -11,6 +11,7 @@ Monitors containers, host system metrics, and API token validity — all in one 
 ![Python](https://img.shields.io/badge/python-3.12-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.138-green)
 ![SQLite](https://img.shields.io/badge/SQLite-WAL-orange)
+![PWA](https://img.shields.io/badge/PWA-5A0FC8?logo=pwa&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Last commit](https://img.shields.io/github/last-commit/kozliatko/dboard)
 ![Issues](https://img.shields.io/github/issues/kozliatko/dboard)
