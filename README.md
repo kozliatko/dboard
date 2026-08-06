@@ -9,8 +9,11 @@ Monitors containers, host system metrics, and API token validity — all in one 
 [![codecov](https://codecov.io/gh/kozliatko/dboard/branch/main/graph/badge.svg)](https://codecov.io/gh/kozliatko/dboard)
 ![Version](https://img.shields.io/github/v/release/kozliatko/dboard)
 ![Python](https://img.shields.io/badge/python-3.12-blue)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-green)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.138-green)
 ![SQLite](https://img.shields.io/badge/SQLite-WAL-orange)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Last commit](https://img.shields.io/github/last-commit/kozliatko/dboard)
+![Issues](https://img.shields.io/github/issues/kozliatko/dboard)
 
 ---
 
