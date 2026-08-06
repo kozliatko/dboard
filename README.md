@@ -12,8 +12,6 @@ Monitors containers, host system metrics, and API token validity — all in one 
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-green)
 ![SQLite](https://img.shields.io/badge/SQLite-WAL-orange)
 
-[![Coverage grid](https://codecov.io/github/kozliatko/dboard/graphs/tree.svg?token=IFWJ2AS8V5)](https://codecov.io/gh/kozliatko/dboard)
-
 ---
 
 ## Screenshots
