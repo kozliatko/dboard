@@ -5,7 +5,7 @@ services:
   # blocked, so even a fully compromised dboard cannot create/modify
   # containers or escape to the host via the Docker API.
   socket-proxy:
-    image: tecnativa/docker-socket-proxy:0.3.0
+    image: tecnativa/docker-socket-proxy:v0.5.0
     restart: unless-stopped
     environment:
       CONTAINERS: 1      # GET /containers/json, /containers/{id}/json, /stats
