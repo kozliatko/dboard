@@ -2,7 +2,7 @@
 # Replaces the cdn.tailwindcss.com runtime engine, which executed third-party
 # JavaScript in the page. The standalone CLI scans our markup + JS for the
 # utility classes actually used and emits a plain, self-hosted CSS file.
-FROM alpine:3.20 AS assets
+FROM alpine:3.24 AS assets
 WORKDIR /build
 ARG TAILWIND_VERSION=v3.4.17
 ADD --chmod=755 \
