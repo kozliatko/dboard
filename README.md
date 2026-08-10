@@ -6,6 +6,7 @@ Monitors containers, host system metrics, and API token validity — all in one 
 [![Security](https://github.com/kozliatko/dboard/actions/workflows/security.yml/badge.svg)](https://github.com/kozliatko/dboard/actions/workflows/security.yml)
 [![Build](https://github.com/kozliatko/dboard/actions/workflows/build.yml/badge.svg)](https://github.com/kozliatko/dboard/actions/workflows/build.yml)
 [![CodeQL](https://github.com/kozliatko/dboard/actions/workflows/codeql.yml/badge.svg)](https://github.com/kozliatko/dboard/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/kozliatko/dboard/badge)](https://scorecard.dev/viewer/?uri=github.com/kozliatko/dboard)
 [![Snyk security](https://snyk.io/test/github/kozliatko/dboard/badge.svg)](https://snyk.io/test/github/kozliatko/dboard)
 [![codecov](https://codecov.io/gh/kozliatko/dboard/branch/main/graph/badge.svg)](https://codecov.io/gh/kozliatko/dboard)
 ![Version](https://img.shields.io/github/v/release/kozliatko/dboard)
