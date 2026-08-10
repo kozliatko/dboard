@@ -54,7 +54,7 @@ Dockerfile
 requirements.txt
 ```
 
-The intentional constraint is **no build toolchain** — no npm, no bundler, no transpiler. Tailwind is loaded from CDN. JS is plain ES2017. If a change requires a build step it probably doesn't belong here.
+The intentional constraint is **minimal frontend tooling** — no npm, no bundler, no transpiler at runtime. Tailwind CSS is compiled to a static stylesheet during the Docker image build (multi-stage Dockerfile). JS is plain ES2017. If a change requires a runtime build step it probably doesn't belong here.
 
 ---
 
@@ -98,10 +98,13 @@ The intentional constraint is **no build toolchain** — no npm, no bundler, no 
 
 1. Fork the repo and create a branch: `git checkout -b feature/my-change`
 2. Make your changes — keep commits focused
-3. Verify the dashboard works end-to-end with `docker compose up -d --build`
-4. Open a pull request with a short description of what changed and why
-
-There are no automated tests — verification is done by running the app.
+3. Run the test suite and confirm it passes:
+   ```bash
+   pip install -r requirements.txt -r requirements-dev.txt
+   pytest tests/
+   ```
+4. Verify the dashboard works end-to-end with `docker compose up -d --build`
+5. Open a pull request with a short description of what changed and why
 
 ---
 
