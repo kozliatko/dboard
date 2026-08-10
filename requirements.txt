@@ -1,8 +1,8 @@
 # Pinned for reproducible builds. Bump deliberately (Dependabot/Renovate),
 # not implicitly. Versions verified working together as of 2026-06.
-docker==7.1.0
-fastapi==0.138.0
-uvicorn[standard]==0.49.0
+docker==7.2.0
+fastapi==0.141.1
+uvicorn[standard]==0.52.1
 jinja2==3.1.6
 python-dateutil==2.9.0.post0
 psutil==7.2.2
