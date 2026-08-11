@@ -16,7 +16,7 @@ RUN printf 'module.exports = { content: ["./templates/**/*.html","./static/**/*.
  && tailwindcss -c tailwind.config.js -i input.css -o ./tailwind.css --minify
 
 # ── Stage 2: runtime ──────────────────────────────────────────────────────────
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 ARG GIT_COMMIT=dev
 ENV PYTHONDONTWRITEBYTECODE=1 \
