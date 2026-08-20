@@ -10,6 +10,7 @@ from main import (
     _check_gemini,
     _check_openai,
     _check_deepseek,
+    _check_mistral,
     _check_tavily,
     _check_gitlab,
     _check_huggingface,
@@ -165,6 +166,24 @@ class TestCheckDeepSeek:
     def test_invalid_key(self):
         with patch("main._http_get", return_value=_err(401)):
             r = _check_deepseek(FAKE_KEY)
+        assert r["valid"] is False
+
+
+# ── Mistral ───────────────────────────────────────────────────────────────────
+
+class TestCheckMistral:
+    def test_valid(self):
+        body = {"data": [{"id": "mistral-large-latest"}, {"id": "open-mistral-7b"}]}
+        with patch("main._http_get", return_value=_ok(body)):
+            r = _check_mistral(FAKE_KEY)
+        assert r["valid"] is True
+        models_extra = next(e for e in r["extras"] if e["label"] == "Models")
+        assert "mistral-large-latest" in models_extra["value"]
+        assert "open-mistral-7b" in models_extra["value"]
+
+    def test_invalid_key(self):
+        with patch("main._http_get", return_value=_err(401)):
+            r = _check_mistral(FAKE_KEY)
         assert r["valid"] is False
 
 
