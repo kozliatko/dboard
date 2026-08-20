@@ -10,9 +10,10 @@ import time
 import urllib.error
 import urllib.request
 from collections import deque
-from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
+import httpx2 as httpx
 import psutil
 
 import docker
@@ -27,6 +28,36 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# Shared HTTP client with connection pooling for upstream API token checks.
+# A single Client keeps TCP/TLS connections alive across checks instead of
+# opening a fresh connection per request (urllib behaviour). Connections are
+# opened lazily, so constructing it at import time is safe even when the
+# network is not reachable yet.
+_http = httpx.Client(timeout=10.0, follow_redirects=False)
+
+
+def _prime_cpu() -> None:
+    """Warm up psutil's CPU meter so non-blocking cpu_percent() has a baseline.
+
+    psutil.cpu_percent(interval=None) returns the usage since the previous
+    call; the very first call would otherwise report 0.0.
+    """
+    try:
+        psutil.cpu_percent(interval=None)
+    except Exception:
+        pass
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup/shutdown: init DB, prime the CPU meter, launch background tasks."""
+    await asyncio.to_thread(_db_init)
+    await asyncio.to_thread(_prime_cpu)
+    asyncio.create_task(_db_pruner())
+    if SAMPLE_INTERVAL > 0:
+        asyncio.create_task(_sampler())
+    yield
+
 def _read_version() -> str:
     try:
         vfile = os.path.join(os.path.dirname(_APP_DIR), "VERSION")
@@ -40,12 +71,11 @@ _GIT_COMMIT = os.environ.get("GIT_COMMIT", "dev")[:7]
 # Ensure the web manifest is served with the spec-recommended MIME type
 mimetypes.add_type("application/manifest+json", ".webmanifest")
 
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 templates = Jinja2Templates(directory=os.path.join(_APP_DIR, "templates"))
 _static_dir = os.path.join(_APP_DIR, "static")
 if os.path.isdir(_static_dir):
     app.mount("/static", StaticFiles(directory=_static_dir), name="static")
-executor = ThreadPoolExecutor(max_workers=16)
 
 # Content-Security-Policy: only self-hosted assets execute. No inline <script>,
 # no third-party CDNs. 'unsafe-inline' is allowed for styles only because the
@@ -53,8 +83,8 @@ executor = ThreadPoolExecutor(max_workers=16)
 _CSP = (
     "default-src 'self'; "
     "script-src 'self'; "
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-    "font-src https://fonts.gstatic.com; "
+    "style-src 'self' 'unsafe-inline'; "
+    "font-src 'self'; "
     "img-src 'self' data:; "
     "connect-src 'self'; "
     "worker-src 'self'; "
@@ -121,11 +151,10 @@ _latest_containers: dict | None = None
 async def _sampler():
     """Periodically sample system + container metrics into the latest snapshot."""
     global _latest_system, _latest_containers
-    loop = asyncio.get_event_loop()
     log.info("Background sampling enabled (every %ds)", SAMPLE_INTERVAL)
     while True:
         try:
-            sysd = await loop.run_in_executor(executor, _system_stats_sync)
+            sysd = await asyncio.to_thread(_system_stats_sync)
             cond = await _collect_containers()
             with _latest_lock:
                 _latest_system = sysd
@@ -139,17 +168,9 @@ async def _db_pruner():
     while True:
         await asyncio.sleep(3600)
         try:
-            await asyncio.get_event_loop().run_in_executor(executor, _db_prune_sync)
+            await asyncio.to_thread(_db_prune_sync)
         except Exception as e:
             log.warning("DB pruner error: %s", e)
-
-
-@app.on_event("startup")
-async def startup():
-    await asyncio.get_event_loop().run_in_executor(executor, _db_init)
-    asyncio.create_task(_db_pruner())
-    if SAMPLE_INTERVAL > 0:
-        asyncio.create_task(_sampler())
 
 
 # ── Docker helpers ────────────────────────────────────────────────────────────
@@ -238,6 +259,27 @@ def _networks_sync(client, net_containers: dict) -> list:
         return []
 
 
+# Docker network topology changes far slower than the 5 s poll cadence, so a
+# short TTL cache removes the redundant /networks API call on every poll.
+_NETWORKS_CACHE_TTL = 30.0  # seconds
+_networks_cache: dict = {}
+_networks_cache_lock = threading.Lock()
+
+
+async def _networks_cached(client, net_containers: dict) -> list:
+    """Return the network topology, computed at most once per TTL window."""
+    now = time.monotonic()
+    with _networks_cache_lock:
+        hit = _networks_cache.get("v")
+        if hit is not None and now - _networks_cache.get("t", 0) < _NETWORKS_CACHE_TTL:
+            return hit
+    result = await asyncio.to_thread(_networks_sync, client, net_containers)
+    with _networks_cache_lock:
+        _networks_cache["v"] = result
+        _networks_cache["t"] = time.monotonic()
+    return result
+
+
 def _uptime(started_at: str) -> str | None:
     try:
         delta = datetime.now(timezone.utc) - date_parser.parse(started_at)
@@ -253,6 +295,15 @@ def _uptime(started_at: str) -> str | None:
 
 
 def _image_name(container) -> str:
+    # Prefer the image reference already present in the container's attrs
+    # (fetched with containers.list) to avoid an extra /images/{id}/json
+    # round-trip to the Docker API per container per poll.
+    try:
+        raw = container.attrs.get("Config", {}).get("Image")
+        if isinstance(raw, str) and raw:
+            return raw
+    except Exception:
+        pass
     try:
         if container.image.tags:
             return container.image.tags[0]
@@ -523,7 +574,7 @@ def _cpu_temp() -> float | None:
 def _system_stats_sync() -> dict:
     global _io_prev
 
-    cpu_pct = psutil.cpu_percent(interval=0.3)
+    cpu_pct = psutil.cpu_percent(interval=None)  # non-blocking: value since last call
     cpu_count = psutil.cpu_count(logical=True) or 1
     cpu_phys = psutil.cpu_count(logical=False) or cpu_count
 
@@ -611,24 +662,17 @@ def _system_stats_sync() -> dict:
 # ── Token validation ──────────────────────────────────────────────────────────
 
 def _http_get(url: str, headers: dict | None = None, timeout: int = 10) -> tuple[int | None, str, dict]:
-    req = urllib.request.Request(url, headers=headers or {})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return r.status, r.read().decode(errors="replace"), dict(r.headers)
-    except urllib.error.HTTPError as e:
-        return e.code, e.read().decode(errors="replace"), dict(e.headers)
+        r = _http.get(url, headers=headers or {}, timeout=timeout)
+        return r.status_code, r.content.decode(errors="replace"), dict(r.headers)
     except Exception as e:
         return None, str(e), {}
 
 
 def _http_post(url: str, payload: dict, headers: dict | None = None, timeout: int = 10) -> tuple[int | None, str, dict]:
-    data = json.dumps(payload).encode()
-    req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json", **(headers or {})}, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return r.status, r.read().decode(errors="replace"), dict(r.headers)
-    except urllib.error.HTTPError as e:
-        return e.code, e.read().decode(errors="replace"), dict(e.headers)
+        r = _http.post(url, json=payload, headers=headers or {}, timeout=timeout)
+        return r.status_code, r.content.decode(errors="replace"), dict(r.headers)
     except Exception as e:
         return None, str(e), {}
 
@@ -1218,8 +1262,7 @@ def _history_sync_uncached(name: str, rng: int) -> dict:
 @app.get("/api/history")
 async def api_history(name: str, range: int = 3600):
     rng = max(60, min(int(range), _DB_RETENTION))
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(executor, _history_sync, name, rng)
+    return await asyncio.to_thread(_history_sync, name, rng)
 
 
 def _system_history_sync(rng: int) -> dict:
@@ -1250,8 +1293,7 @@ def _system_history_sync_uncached(rng: int) -> dict:
 @app.get("/api/system-history")
 async def api_system_history(range: int = 3600):
     rng = max(60, min(int(range), _DB_RETENTION))
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(executor, _system_history_sync, rng)
+    return await asyncio.to_thread(_system_history_sync, rng)
 
 
 _STACK_TOP = 8  # keep the largest N containers; fold the rest into "other"
@@ -1297,8 +1339,16 @@ def _stack_sync_uncached(metric: str, rng: int) -> dict:
 @app.get("/api/stack")
 async def api_stack(metric: str = "cpu", range: int = 3600):
     rng = max(60, min(int(range), _DB_RETENTION))
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(executor, _stack_sync, metric, rng)
+    return await asyncio.to_thread(_stack_sync, metric, rng)
+
+
+# In on-demand mode (SAMPLE_INTERVAL == 0) every viewer triggers a full system
+# gather + DB write per poll. A short TTL result cache deduplicates concurrent
+# viewers the same way the background sampler's _latest_* snapshot does in
+# sampling mode; the 5 s frontend poll cadence keeps it fresh enough.
+_SYS_CACHE_TTL = 4.0  # seconds — just under the 5 s frontend poll
+_sys_cache: dict = {}
+_sys_cache_lock = threading.Lock()
 
 
 @app.get("/api/system")
@@ -1307,8 +1357,16 @@ async def api_system():
         with _latest_lock:
             if _latest_system is not None:
                 return _latest_system
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(executor, _system_stats_sync)
+    now = time.monotonic()
+    with _sys_cache_lock:
+        hit = _sys_cache.get("v")
+        if hit is not None and now - _sys_cache.get("t", 0) < _SYS_CACHE_TTL:
+            return hit
+    sysd = await asyncio.to_thread(_system_stats_sync)
+    with _sys_cache_lock:
+        _sys_cache["v"] = sysd
+        _sys_cache["t"] = time.monotonic()
+    return sysd
 
 
 @app.get("/api/tokens")
@@ -1335,9 +1393,8 @@ async def api_tokens(refresh: bool = False):
             to_check.append(td)
 
     if to_check:
-        loop = asyncio.get_event_loop()
         checked = await asyncio.gather(
-            *[loop.run_in_executor(executor, _check_token_sync, td) for td in to_check]
+            *[asyncio.to_thread(_check_token_sync, td) for td in to_check]
         )
         for r in checked:
             _TOKEN_CACHE[r["id"]] = {**r, "_t": now}
@@ -1348,13 +1405,29 @@ async def api_tokens(refresh: bool = False):
     return {"tokens": results, "cache_ttl": _TOKEN_CACHE_TTL}
 
 
+# On-demand mode (SAMPLE_INTERVAL == 0): a short TTL deduplicates concurrent
+# viewers so only one full Docker scan happens per window (see _sys_cache).
+_CONTAINERS_CACHE_TTL = 4.0  # seconds — just under the 5 s frontend poll
+_containers_cache: dict = {}
+_containers_cache_lock = threading.Lock()
+
+
 @app.get("/api/containers")
 async def api_containers():
     if SAMPLE_INTERVAL > 0:
         with _latest_lock:
             if _latest_containers is not None:
                 return _latest_containers
-    return await _collect_containers()
+    now = time.monotonic()
+    with _containers_cache_lock:
+        hit = _containers_cache.get("v")
+        if hit is not None and now - _containers_cache.get("t", 0) < _CONTAINERS_CACHE_TTL:
+            return hit
+    payload = await _collect_containers()
+    with _containers_cache_lock:
+        _containers_cache["v"] = payload
+        _containers_cache["t"] = time.monotonic()
+    return payload
 
 
 async def _collect_containers() -> dict:
@@ -1412,9 +1485,8 @@ async def _collect_containers() -> dict:
 
     all_running = [p for p in proxied + others if p["status"] == "running"]
     if all_running:
-        loop = asyncio.get_event_loop()
         results = await asyncio.gather(
-            *[loop.run_in_executor(executor, _stats_sync, obj) for obj in running_objs]
+            *[asyncio.to_thread(_stats_sync, obj) for obj in running_objs]
         )
         now = time.monotonic()
         for p, stats in zip(all_running, results):
@@ -1452,14 +1524,23 @@ async def _collect_containers() -> dict:
         for net_name in c.attrs.get("NetworkSettings", {}).get("Networks", {}).keys():
             net_containers.setdefault(net_name, []).append(cname)
 
-    # Fetch Docker networks (best-effort — requires NETWORKS: 1 in socket-proxy)
-    networks = await asyncio.get_event_loop().run_in_executor(
-        executor, _networks_sync, d, net_containers
-    )
+    # Fetch Docker networks (best-effort — requires NETWORKS: 1 in socket-proxy),
+    # with a short TTL: topology changes far slower than the 5 s poll cadence.
+    networks = await _networks_cached(d, net_containers)
 
     # Persist container stats to DB (fire-and-forget)
     if all_running:
-        loop.run_in_executor(executor, _db_write_containers, all_running)
+        asyncio.create_task(asyncio.to_thread(_db_write_containers, all_running))
+
+    # Prune ring buffers / I/O baselines for containers that no longer exist, so
+    # container churn doesn't leak memory indefinitely.
+    current_names = {c.name.lstrip("/") for c in all_containers}
+    for key in list(_container_spark):
+        if key not in current_names:
+            del _container_spark[key]
+    for key in list(_container_io_prev):
+        if key not in current_names:
+            del _container_io_prev[key]
 
     for p in proxied + others:
         name = p["name"]

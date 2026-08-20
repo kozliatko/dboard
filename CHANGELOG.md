@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Non-blocking CPU sampling** — `psutil.cpu_percent()` is now called without
+  the blocking 0.3 s interval (value since last call, primed at startup), so
+  each `/api/system` poll no longer stalls for 300 ms.
+- **One less Docker round-trip per container per poll** — the image name is
+  read from the container's already-fetched `Config.Image` instead of the lazy
+  image API lookup.
+- **Deduplicated on-demand metrics** — short TTL result caches (4 s) for
+  `/api/system` and `/api/containers`, plus a 30 s TTL for the Docker network
+  topology, so concurrent viewers trigger only one full gather per window.
+- **Pruned container ring buffers** — sparkline and I/O baseline state for
+  containers that no longer exist is removed on each poll instead of leaking.
+- **HTTP connection pooling** — upstream token checks now share a single
+  `httpx2` client (kept-alive connections) instead of opening a fresh urllib
+  connection per request.
+- **Self-hosted webfonts** — Outfit and JetBrains Mono are served from
+  `/static/fonts/` instead of the Google Fonts CDN (removed the CSP
+  `fonts.googleapis.com` / `fonts.gstatic.com` exceptions); the service worker
+  precaches them for offline UI.
+
+### Security
+- **Escaped network/container names in the frontend** — `renderNetworks()` now
+  runs user-influenced names through the same `esc()` helper used everywhere
+  else, closing the only unescaped interpolation in the UI.
+
 ## [0.3.15] - 2026-08-05
 
 ### Security

@@ -35,6 +35,11 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(main, "_docker", None)
     monkeypatch.setattr(main, "_dock", lambda: None)
     main._container_spark.clear()
+    main._container_io_prev.clear()
+    # Short-TTL result caches must not leak state between tests.
+    main._sys_cache.clear()
+    main._containers_cache.clear()
+    main._networks_cache.clear()
 
     from fastapi.testclient import TestClient
     with TestClient(main.app, raise_server_exceptions=True) as c:
@@ -60,6 +65,14 @@ class TestSecurityHeaders:
         assert r.headers.get("Referrer-Policy") == "no-referrer"
         assert "Permissions-Policy" in r.headers
 
+    def test_csp_has_no_external_font_cdns(self, client):
+        # Fonts are self-hosted — no Google Fonts exceptions in the CSP.
+        r = client.get("/")
+        csp = r.headers["Content-Security-Policy"]
+        assert "fonts.googleapis.com" not in csp
+        assert "fonts.gstatic.com" not in csp
+        assert "font-src 'self'" in csp
+
 
 # ── / (dashboard) ─────────────────────────────────────────────────────────────
 
@@ -73,6 +86,21 @@ class TestDashboard:
         r = client.get("/")
         import main
         assert main._VERSION in r.text
+
+    def test_fonts_are_self_hosted(self, client):
+        r = client.get("/")
+        assert "/static/fonts.css" in r.text
+        assert "fonts.googleapis.com" not in r.text
+        assert "fonts.gstatic.com" not in r.text
+
+    def test_font_assets_are_served(self, client):
+        css = client.get("/static/fonts.css")
+        assert css.status_code == 200
+        assert "woff2" in css.text
+        for font in ("/static/fonts/Outfit.woff2", "/static/fonts/JetBrainsMono.woff2"):
+            f = client.get(font)
+            assert f.status_code == 200
+            assert len(f.content) > 10_000  # real font file, not an error page
 
 
 # ── /api/containers ───────────────────────────────────────────────────────────
@@ -120,6 +148,34 @@ class TestApiContainers:
         assert data["proxied"] == []
         assert data["others"] == []
 
+    def test_on_demand_ttl_cache_dedupes(self, client, monkeypatch):
+        import main
+        calls = {"n": 0}
+
+        async def fake():
+            calls["n"] += 1
+            return {"proxied": [], "others": [], "networks": []}
+
+        monkeypatch.setattr(main, "_collect_containers", fake)
+        client.get("/api/containers")
+        client.get("/api/containers")
+        assert calls["n"] == 1  # only one full Docker scan per TTL window
+
+    def test_prunes_spark_for_removed_containers(self, client, monkeypatch):
+        import main
+        from collections import deque
+
+        main._container_spark["ghost"] = {
+            k: deque(maxlen=10) for k in ("cpu", "mem", "net_rx", "net_tx")
+        }
+        main._container_io_prev["ghost"] = {"t": 0, "rx": 0, "tx": 0}
+        monkeypatch.setattr(main, "_dock", lambda: _mock_docker())
+
+        client.get("/api/containers")
+
+        assert "ghost" not in main._container_spark
+        assert "ghost" not in main._container_io_prev
+
 
 # ── /api/system ───────────────────────────────────────────────────────────────
 
@@ -133,6 +189,35 @@ class TestApiSystem:
         data = r.json()
         assert data["cpu_percent"] == 12.5
         assert data["mem_percent"] == 45.0
+
+    def test_on_demand_ttl_cache_dedupes(self, client, monkeypatch):
+        import main
+        calls = {"n": 0}
+
+        def fake():
+            calls["n"] += 1
+            return {"cpu_percent": calls["n"], "mem_percent": 1.0}
+
+        monkeypatch.setattr(main, "_system_stats_sync", fake)
+        first = client.get("/api/system").json()
+        second = client.get("/api/system").json()
+        assert first["cpu_percent"] == 1
+        assert second["cpu_percent"] == 1  # served from the TTL cache
+        assert calls["n"] == 1  # gather happened exactly once
+
+    def test_ttl_expiry_forces_recompute(self, client, monkeypatch):
+        import main
+        monkeypatch.setattr(main, "_SYS_CACHE_TTL", -1)
+        calls = {"n": 0}
+
+        def fake():
+            calls["n"] += 1
+            return {"cpu_percent": calls["n"], "mem_percent": 1.0}
+
+        monkeypatch.setattr(main, "_system_stats_sync", fake)
+        client.get("/api/system")
+        client.get("/api/system")
+        assert calls["n"] == 2
 
     def test_sampler_cache_used_when_available(self, client, monkeypatch):
         import main

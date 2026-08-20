@@ -11,6 +11,9 @@ const CACHE = 'dboard-shell-v4';
 const SHELL = [
   '/',
   '/static/tailwind.css',
+  '/static/fonts.css',
+  '/static/fonts/Outfit.woff2',
+  '/static/fonts/JetBrainsMono.woff2',
   '/static/app.js',
   '/static/icon.svg',
   '/static/favicon.ico',
