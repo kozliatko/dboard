@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 
 import httpx2 as httpx
 import psutil
+import requests
 
 import docker
 from dateutil import parser as date_parser
@@ -118,6 +119,13 @@ _docker_lock = threading.Lock()
 # container concurrently, so hosts with more than 10 containers saw
 # "Connection pool is full, discarding connection" warnings on every poll.
 # 64 gives headroom well beyond current host counts.
+#
+# NOTE: docker-py's own `max_pool_size` kwarg only reaches the transport
+# adapter for unix socket / npipe / ssh / TLS-over-TCP connections (see
+# APIClient.__init__) — for plain tcp:// (our socket-proxy setup, no TLS) it
+# is silently ignored and the plain `requests.Session` default (pool size 10)
+# stays in effect. We mount our own larger-pool adapter after the client is
+# built to actually apply the limit.
 _DOCKER_POOL_SIZE = 64
 
 
@@ -128,6 +136,12 @@ def _dock():
             if _docker is None:
                 try:
                     client = docker.from_env(max_pool_size=_DOCKER_POOL_SIZE)
+                    adapter = requests.adapters.HTTPAdapter(
+                        pool_connections=_DOCKER_POOL_SIZE,
+                        pool_maxsize=_DOCKER_POOL_SIZE,
+                    )
+                    client.api.mount("http://", adapter)
+                    client.api.mount("https://", adapter)
                     client.ping()
                     _docker = client
                 except Exception as e:
