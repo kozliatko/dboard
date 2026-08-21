@@ -151,6 +151,7 @@ All variables are optional. Leave any blank to disable that token check.
 | `GEMINI_API_KEY` | Google Gemini API key |
 | `OPENAI_API_KEY` | OpenAI API key |
 | `DEEPSEEK_API_KEY` | DeepSeek API key |
+| `MISTRAL_API_KEY` | Mistral AI API key |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID (required alongside `CLOUDFLARE_API_TOKEN`) |
 | `CLOUDFLARE_API_TOKEN` | Cloudflare API token (needs **Workers AI: Read** + optionally **Account Analytics: Read** for neuron stats) |
 | `GOOGLE_CREDENTIALS_JSON` | Google Cloud service account key — raw JSON or base64-encoded JSON (`GOOGLE_CREDENTIALS_JSON=$(base64 -w0 key.json)`) |
