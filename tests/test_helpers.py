@@ -261,6 +261,19 @@ class TestDock:
         assert result is None
         monkeypatch.setattr(main, "_docker", None)  # reset global state
 
+    def test_sizes_connection_pool_above_default(self, monkeypatch):
+        # docker-py's default max_pool_size=10 causes "Connection pool is
+        # full" warnings once a host runs more than 10 containers, since
+        # _collect_containers() fetches stats for all of them concurrently.
+        import main
+        monkeypatch.setattr(main, "_docker", None)
+        with patch("main.docker.from_env") as from_env:
+            from_env.return_value.ping.return_value = True
+            main._dock()
+        assert from_env.call_args.kwargs["max_pool_size"] == main._DOCKER_POOL_SIZE
+        assert main._DOCKER_POOL_SIZE > 10
+        monkeypatch.setattr(main, "_docker", None)  # reset global state
+
 
 # ── _stats_sync ───────────────────────────────────────────────────────────────
 
