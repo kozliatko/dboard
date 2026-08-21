@@ -274,6 +274,25 @@ class TestDock:
         assert main._DOCKER_POOL_SIZE > 10
         monkeypatch.setattr(main, "_docker", None)  # reset global state
 
+    def test_mounts_adapter_sized_pool_for_plain_tcp(self, monkeypatch):
+        # docker-py's `max_pool_size` kwarg (asserted above) is only honored
+        # by APIClient for unix socket / npipe / ssh / TLS-over-TCP
+        # transports (see APIClient.__init__) — for plain tcp:// (our
+        # socket-proxy setup, no TLS) it is silently ignored and the
+        # `requests.Session` default pool (size 10) stays in effect. _dock()
+        # must mount its own larger-pool adapter to actually apply the limit.
+        import main
+        monkeypatch.setattr(main, "_docker", None)
+        with patch("main.docker.from_env") as from_env:
+            client = from_env.return_value
+            client.ping.return_value = True
+            main._dock()
+        mounted = {c.args[0]: c.args[1] for c in client.api.mount.call_args_list}
+        assert set(mounted) == {"http://", "https://"}
+        for adapter in mounted.values():
+            assert adapter._pool_maxsize == main._DOCKER_POOL_SIZE
+        monkeypatch.setattr(main, "_docker", None)  # reset global state
+
 
 # ── _stats_sync ───────────────────────────────────────────────────────────────
 

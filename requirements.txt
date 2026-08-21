@@ -1,6 +1,7 @@
 # Pinned for reproducible builds. Bump deliberately (Dependabot/Renovate),
 # not implicitly. Versions verified working together as of 2026-06.
 docker==7.2.0
+requests==2.34.2
 fastapi==0.141.1
 httpx2==2.12.0
 uvicorn[standard]==0.52.3

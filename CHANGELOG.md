@@ -30,10 +30,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/static/fonts/` instead of the Google Fonts CDN (removed the CSP
   `fonts.googleapis.com` / `fonts.gstatic.com` exceptions); the service worker
   precaches them for offline UI.
-- **Larger Docker API connection pool** — `docker.from_env()` now sets
-  `max_pool_size=64` (was the docker-py default of 10), fixing
-  "Connection pool is full, discarding connection" warnings on hosts with
-  more than 10 containers, since container stats are fetched concurrently.
+- **Larger Docker API connection pool** — mounts a `requests.HTTPAdapter`
+  with `pool_maxsize=64` (was the `requests`/urllib3 default of 10) onto the
+  Docker client's session, fixing "Connection pool is full, discarding
+  connection" warnings on hosts with more than 10 containers, since
+  container stats are fetched concurrently. `docker.from_env()`'s own
+  `max_pool_size` kwarg does not cover this: docker-py only forwards it to
+  the transport adapter for unix socket / npipe / ssh / TLS-over-TCP
+  connections — for plain `tcp://` (this project's socket-proxy setup, no
+  TLS) it was silently ignored, so an earlier attempt at this fix had no
+  effect in production.
 
 ### Security
 - **Escaped network/container names in the frontend** — `renderNetworks()` now
