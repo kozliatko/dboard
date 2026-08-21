@@ -426,7 +426,10 @@
     }
     if (tabBtn)   tabBtn.style.display = '';
     if (tabPanel) tabPanel.style.display = '';
-    rawTokens = configured;
+    // Invalid first (needs attention), then alphabetical within each group.
+    rawTokens = configured.slice().sort((a, b) =>
+      (a.valid === b.valid) ? a.name.localeCompare(b.name) : (a.valid ? 1 : -1)
+    );
     const valid = configured.filter(t => t.valid).length;
     $('lbl-tokens').textContent = `${valid} valid / ${configured.length} configured`;
     $('badge-tokens').textContent = `${valid} / ${configured.length}`;
