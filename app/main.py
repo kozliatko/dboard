@@ -819,6 +819,23 @@ def _check_deepseek(key: str, td: dict | None = None) -> dict:
     }
 
 
+def _check_mistral(key: str, td: dict | None = None) -> dict:
+    code, body, _ = _http_get(
+        "https://api.mistral.ai/v1/models",
+        headers={"Authorization": f"Bearer {key}"},
+    )
+    if code != 200:
+        return {"valid": False, "detail": f"HTTP {code}"}
+    models = [m["id"] for m in json.loads(body).get("data", [])]
+    return {
+        "valid": True,
+        "detail": f"{len(models)} models",
+        "extras": _extras(
+            ("Models", ", ".join(models)),
+        ),
+    }
+
+
 def _check_tavily(key: str, td: dict | None = None) -> dict:
     data = json.dumps({"api_key": key, "query": "ping", "max_results": 1}).encode()
     req = urllib.request.Request(
@@ -1102,6 +1119,7 @@ _TOKEN_DEFS = [
     {"id": "gemini",    "name": "Gemini",    "env_var": "GEMINI_API_KEY",     "fn": _check_gemini},
     {"id": "openai",    "name": "OpenAI",    "env_var": "OPENAI_API_KEY",     "fn": _check_openai},
     {"id": "deepseek",  "name": "DeepSeek",  "env_var": "DEEPSEEK_API_KEY",   "fn": _check_deepseek},
+    {"id": "mistral",   "name": "Mistral",   "env_var": "MISTRAL_API_KEY",    "fn": _check_mistral},
     {"id": "cloudflare",   "name": "Cloudflare AI",  "env_var": "CLOUDFLARE_API_TOKEN",  "fn": _check_cloudflare},
     {"id": "gcp",          "name": "Google Cloud",   "env_var": "GOOGLE_CREDENTIALS_JSON","fn": _check_gcp},
     {"id": "huggingface",  "name": "Hugging Face",   "env_var": "HUGGINGFACE_TOKEN",      "fn": _check_huggingface},

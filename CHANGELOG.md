@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Mistral API key validator** — validates via `GET /v1/models`; shows the
+  list of available models. Configured via `MISTRAL_API_KEY`.
+
 ### Changed
 - **Non-blocking CPU sampling** — `psutil.cpu_percent()` is now called without
   the blocking 0.3 s interval (value since last call, primed at startup), so
