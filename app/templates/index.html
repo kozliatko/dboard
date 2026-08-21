@@ -743,7 +743,10 @@
   <div id="tab-tokens" class="tab-panel"{% if not tokens_configured %} style="display:none"{% endif %}>
     <div class="section-bar">
       <div class="section-title">API Tokens <span id="lbl-tokens"></span></div>
-      <button class="refresh-btn" id="tok-refresh-btn">↻ refresh</button>
+      <div class="flex items-center gap-2">
+        <input id="filter-tokens" type="text" class="filter-input" placeholder="Filter…">
+        <button class="refresh-btn" id="tok-refresh-btn">↻ refresh</button>
+      </div>
     </div>
     <div id="tok-grid" class="tok-grid"></div>
   </div>
