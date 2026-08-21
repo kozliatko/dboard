@@ -113,6 +113,13 @@ async def _security_headers(request: Request, call_next):
 _docker = None
 _docker_lock = threading.Lock()
 
+# docker-py's default urllib3 pool (max_pool_size=10) is sized for a handful
+# of containers; _collect_containers() fetches stats for every running
+# container concurrently, so hosts with more than 10 containers saw
+# "Connection pool is full, discarding connection" warnings on every poll.
+# 64 gives headroom well beyond current host counts.
+_DOCKER_POOL_SIZE = 64
+
 
 def _dock():
     global _docker
@@ -120,7 +127,7 @@ def _dock():
         with _docker_lock:
             if _docker is None:
                 try:
-                    client = docker.from_env()
+                    client = docker.from_env(max_pool_size=_DOCKER_POOL_SIZE)
                     client.ping()
                     _docker = client
                 except Exception as e:

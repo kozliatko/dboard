@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/static/fonts/` instead of the Google Fonts CDN (removed the CSP
   `fonts.googleapis.com` / `fonts.gstatic.com` exceptions); the service worker
   precaches them for offline UI.
+- **Larger Docker API connection pool** — `docker.from_env()` now sets
+  `max_pool_size=64` (was the docker-py default of 10), fixing
+  "Connection pool is full, discarding connection" warnings on hosts with
+  more than 10 containers, since container stats are fetched concurrently.
 
 ### Security
 - **Escaped network/container names in the frontend** — `renderNetworks()` now
