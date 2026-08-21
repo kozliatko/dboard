@@ -1,4 +1,6 @@
 .env
+*~
+DEADJOE
 __pycache__/
 *.pyc
 *.pyo
