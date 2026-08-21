@@ -100,6 +100,61 @@ class TestKeyHint:
         assert hint == "abcd···mnop"
 
 
+# ── _http_get / _http_post (httpx2 client) ────────────────────────────────────
+
+class TestHttpHelpers:
+    def test_get_returns_status_body_headers(self, monkeypatch):
+        import main
+        from unittest.mock import MagicMock
+
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.content = b'{"ok": true}'
+        resp.headers = {"Content-Type": "application/json"}
+
+        fake_client = MagicMock()
+        fake_client.get.return_value = resp
+        monkeypatch.setattr(main, "_http", fake_client)
+
+        code, body, hdrs = main._http_get("https://example.com/api")
+        assert code == 200
+        assert body == '{"ok": true}'
+        assert hdrs["Content-Type"] == "application/json"
+        # the shared client is used (connection pooling), not raw urllib
+        fake_client.get.assert_called_once()
+
+    def test_get_network_error_returns_none(self, monkeypatch):
+        import main
+        from unittest.mock import MagicMock
+
+        fake_client = MagicMock()
+        fake_client.get.side_effect = Exception("connection refused")
+        monkeypatch.setattr(main, "_http", fake_client)
+
+        code, body, _ = main._http_get("https://example.com/api")
+        assert code is None
+        assert "connection refused" in body
+
+    def test_post_sends_json_payload(self, monkeypatch):
+        import main
+        from unittest.mock import MagicMock
+
+        resp = MagicMock()
+        resp.status_code = 201
+        resp.content = b'{"created": true}'
+        resp.headers = {}
+
+        fake_client = MagicMock()
+        fake_client.post.return_value = resp
+        monkeypatch.setattr(main, "_http", fake_client)
+
+        code, body, _ = main._http_post("https://example.com/api", {"a": 1})
+        assert code == 201
+        assert body == '{"created": true}'
+        kwargs = fake_client.post.call_args.kwargs
+        assert kwargs.get("json") == {"a": 1}  # sent as JSON body
+
+
 # ── _extras ───────────────────────────────────────────────────────────────────
 
 class TestExtras:
@@ -277,6 +332,19 @@ class TestStatsSync:
 # ── _image_name ───────────────────────────────────────────────────────────────
 
 class TestImageName:
+    def test_uses_config_image_without_roundtrip(self):
+        # Config.Image is already present in the container attrs from
+        # containers.list(); _image_name must use it without touching the
+        # image API (which would be an extra /images/{id}/json round-trip).
+        class NoImageApi(MagicMock):
+            @property
+            def image(self):
+                raise AssertionError("_image_name must not hit the image API when Config.Image is set")
+
+        c = NoImageApi()
+        c.attrs = {"Config": {"Image": "nginx:alpine"}}
+        assert _image_name(c) == "nginx:alpine"
+
     def test_uses_first_tag(self):
         c = MagicMock()
         c.image.tags = ["nginx:alpine", "nginx:latest"]
@@ -343,6 +411,97 @@ class TestNetworksSync:
         docker_client = MagicMock()
         docker_client.networks.list.side_effect = Exception("socket error")
         assert _networks_sync(docker_client, {}) == []
+
+
+# ── _system_stats_sync ────────────────────────────────────────────────────────
+
+class TestSystemStatsSync:
+    def test_cpu_percent_nonblocking(self, monkeypatch):
+        import main
+        from unittest.mock import MagicMock
+
+        monkeypatch.setattr(main, "_db_write_sys", lambda *a, **k: None)
+        monkeypatch.setattr(main, "_host_disks", lambda: [])
+        monkeypatch.setattr(main, "_cpu_temp", lambda: None)
+
+        cpu_percent = MagicMock(return_value=12.5)
+        monkeypatch.setattr(main.psutil, "cpu_percent", cpu_percent)
+
+        mem = MagicMock()
+        mem.total = 8 * 1024 ** 3
+        mem.available = 4 * 1024 ** 3
+        monkeypatch.setattr(main.psutil, "virtual_memory", lambda: mem)
+
+        swap = MagicMock()
+        swap.total = 0
+        swap.used = 0
+        swap.percent = 0
+        monkeypatch.setattr(main.psutil, "swap_memory", lambda: swap)
+
+        net = MagicMock()
+        net.bytes_recv = 1000
+        net.bytes_sent = 500
+        monkeypatch.setattr(main.psutil, "net_io_counters", lambda: net)
+
+        disk = MagicMock()
+        disk.read_bytes = 100
+        disk.write_bytes = 50
+        monkeypatch.setattr(main.psutil, "disk_io_counters", lambda: disk)
+
+        monkeypatch.setattr(main.psutil, "cpu_count", lambda logical=True: 4)
+        monkeypatch.setattr(main.os, "getloadavg", lambda: (1.0, 2.0, 3.0))
+
+        result = main._system_stats_sync()
+
+        # Non-blocking sampling: no interval argument, never sleeps 300 ms.
+        cpu_percent.assert_called_once_with(interval=None)
+        assert result["cpu_percent"] == 12.5
+        assert result["cpu_count"] == 4
+
+
+# ── _networks_cached ──────────────────────────────────────────────────────────
+
+class TestNetworksCached:
+    def setup_method(self):
+        import main
+        main._networks_cache.clear()
+
+    def test_cached_within_ttl(self, monkeypatch):
+        import asyncio
+        import main
+        calls = {"n": 0}
+
+        def fake(client, net_containers):
+            calls["n"] += 1
+            return [{"name": "bridge"}]
+
+        monkeypatch.setattr(main, "_networks_sync", fake)
+
+        async def run():
+            await main._networks_cached(None, {})
+            await main._networks_cached(None, {})
+
+        asyncio.run(run())
+        assert calls["n"] == 1  # second call served from cache
+
+    def test_ttl_expiry_forces_recompute(self, monkeypatch):
+        import asyncio
+        import main
+        monkeypatch.setattr(main, "_NETWORKS_CACHE_TTL", -1)
+        calls = {"n": 0}
+
+        def fake(client, net_containers):
+            calls["n"] += 1
+            return []
+
+        monkeypatch.setattr(main, "_networks_sync", fake)
+
+        async def run():
+            await main._networks_cached(None, {})
+            await main._networks_cached(None, {})
+
+        asyncio.run(run())
+        assert calls["n"] == 2
 
 
 # ── _host_disks ───────────────────────────────────────────────────────────────

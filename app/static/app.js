@@ -973,10 +973,10 @@
         n.scope === 'swarm' ? `<span class="net-badge net-badge-swarm">swarm</span>` : '',
       ].join('');
       const ctags = n.container_names.map(name =>
-        `<span class="net-ctag">${name}</span>`
+        `<span class="net-ctag">${esc(name)}</span>`
       ).join('');
       return `<div class="net-card">
-        <div class="net-card-name">${n.name}</div>
+        <div class="net-card-name">${esc(n.name)}</div>
         <div class="net-badges">${badges}</div>
         <div class="net-count"><strong>${n.container_count}</strong> container${n.container_count !== 1 ? 's' : ''}</div>
         ${ctags ? `<div class="net-containers">${ctags}</div>` : ''}

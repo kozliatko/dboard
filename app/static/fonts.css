@@ -1,0 +1,18 @@
+/* Self-hosted webfonts — no third-party CDN, no external requests.
+   Latin subset only, variable-weight files (matches the weights used in
+   index.html: Outfit 400-700, JetBrains Mono 400-500). */
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/static/fonts/Outfit.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400 500;
+  font-display: swap;
+  src: url('/static/fonts/JetBrainsMono.woff2') format('woff2');
+}

@@ -6,11 +6,14 @@
 // so the data stays live.
 //
 // Bump CACHE on each release to evict the old shell.
-const CACHE = 'dboard-shell-v4';
+const CACHE = 'dboard-shell-v5';
 
 const SHELL = [
   '/',
   '/static/tailwind.css',
+  '/static/fonts.css',
+  '/static/fonts/Outfit.woff2',
+  '/static/fonts/JetBrainsMono.woff2',
   '/static/app.js',
   '/static/icon.svg',
   '/static/favicon.ico',
