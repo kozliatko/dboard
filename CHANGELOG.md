@@ -10,10 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Mistral API key validator** — validates via `GET /v1/models`; shows the
   list of available models. Configured via `MISTRAL_API_KEY`.
-- **Azure OpenAI key validator** — validates via `GET /openai/deployments`;
-  shows the resource's deployment names. Configured via `AZURE_OPENAI_API_KEY`
-  + `AZURE_OPENAI_ENDPOINT` (the resource endpoint, since Azure OpenAI has no
-  fixed API host like the other providers).
+- **Azure OpenAI key validator** — validates via `GET {endpoint}/models`
+  against the v1 API surface; shows the model count and how many support
+  chat completion. Configured via `AZURE_OPENAI_API_KEY` + `AZURE_OPENAI_ENDPOINT`
+  (the resource endpoint, including the `/openai/v1` suffix, since Azure
+  OpenAI has no fixed API host like the other providers).
 - **Networks tab filter** — a filter input (matching the one on the
   Containers tables) narrows the network cards by name.
 - **Tokens tab filter** — same filter input next to the refresh button,

@@ -150,7 +150,7 @@ All variables are optional. Leave any blank to disable that token check.
 | `GITLAB_HOST` | GitLab instance hostname (default: `gitlab.com`) |
 | `GEMINI_API_KEY` | Google Gemini API key |
 | `OPENAI_API_KEY` | OpenAI API key |
-| `AZURE_OPENAI_ENDPOINT` | Azure OpenAI resource endpoint (required alongside `AZURE_OPENAI_API_KEY`), e.g. `https://myresource.openai.azure.com` |
+| `AZURE_OPENAI_ENDPOINT` | Azure OpenAI v1 resource endpoint, including the `/openai/v1` suffix (required alongside `AZURE_OPENAI_API_KEY`), e.g. `https://myresource.openai.azure.com/openai/v1` |
 | `AZURE_OPENAI_API_KEY` | Azure OpenAI API key |
 | `DEEPSEEK_API_KEY` | DeepSeek API key |
 | `MISTRAL_API_KEY` | Mistral AI API key |

@@ -835,23 +835,27 @@ def _check_openai(key: str, td: dict | None = None) -> dict:
 def _check_azure_openai(key: str, td: dict | None = None) -> dict:
     # Azure OpenAI is resource-scoped (no fixed api.openai.com-style host), so
     # the resource endpoint travels alongside the key as a companion env var —
-    # same pattern as CLOUDFLARE_ACCOUNT_ID for Cloudflare.
+    # same pattern as CLOUDFLARE_ACCOUNT_ID for Cloudflare. AZURE_OPENAI_ENDPOINT
+    # is expected in the newer "v1" form, e.g.
+    # https://<resource>.openai.azure.com/openai/v1 — that's what /models below
+    # is relative to (the older per-resource /openai/deployments?api-version=
+    # endpoint is a different, older API surface and 404s against a v1 URL).
     endpoint = _companion_env(td or {}, "AZURE_OPENAI_ENDPOINT") if td else os.environ.get("AZURE_OPENAI_ENDPOINT", "").strip()
     if not endpoint:
         return {"valid": False, "detail": "AZURE_OPENAI_ENDPOINT not set"}
     code, body, _ = _http_get(
-        f"{endpoint.rstrip('/')}/openai/deployments?api-version=2023-05-15",
+        f"{endpoint.rstrip('/')}/models",
         headers={"api-key": key},
     )
     if code != 200:
         return {"valid": False, "detail": f"HTTP {code}"}
-    deployments = json.loads(body).get("data", [])
-    names = [d.get("id", "") for d in deployments]
+    models = json.loads(body).get("data", [])
+    chat = [m for m in models if m.get("capabilities", {}).get("chat_completion")]
     return {
         "valid": True,
-        "detail": f"{len(deployments)} deployment{'s' if len(deployments) != 1 else ''}",
+        "detail": f"{len(models)} models available",
         "extras": _extras(
-            ("Deployments", ", ".join(names)),
+            ("Chat-capable", str(len(chat))),
         ),
     }
 
