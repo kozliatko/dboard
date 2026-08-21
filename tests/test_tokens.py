@@ -9,6 +9,7 @@ from main import (
     _check_github,
     _check_gemini,
     _check_openai,
+    _check_azure_openai,
     _check_deepseek,
     _check_mistral,
     _check_tavily,
@@ -136,6 +137,42 @@ class TestCheckOpenAI:
     def test_invalid_key(self):
         with patch("main._http_get", return_value=_err(401)):
             r = _check_openai(FAKE_KEY)
+        assert r["valid"] is False
+
+
+# ── Azure OpenAI ──────────────────────────────────────────────────────────────
+
+class TestCheckAzureOpenAI:
+    def test_missing_endpoint_rejected(self, monkeypatch):
+        monkeypatch.delenv("AZURE_OPENAI_ENDPOINT", raising=False)
+        r = _check_azure_openai(FAKE_KEY)
+        assert r["valid"] is False
+        assert "AZURE_OPENAI_ENDPOINT" in r["detail"]
+
+    def test_valid(self, monkeypatch):
+        monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://myresource.openai.azure.com")
+        body = {"data": [{"id": "gpt-4-deploy"}, {"id": "gpt-35-deploy"}]}
+        with patch("main._http_get", return_value=_ok(body)) as http_get:
+            r = _check_azure_openai(FAKE_KEY)
+        assert r["valid"] is True
+        deploy_extra = next(e for e in r["extras"] if e["label"] == "Deployments")
+        assert "gpt-4-deploy" in deploy_extra["value"]
+        called_url = http_get.call_args.args[0]
+        assert called_url.startswith("https://myresource.openai.azure.com/openai/deployments")
+        assert "api-version=" in called_url
+        assert http_get.call_args.kwargs["headers"] == {"api-key": FAKE_KEY}
+
+    def test_endpoint_trailing_slash_stripped(self, monkeypatch):
+        monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://myresource.openai.azure.com/")
+        with patch("main._http_get", return_value=_ok({"data": []})) as http_get:
+            _check_azure_openai(FAKE_KEY)
+        called_url = http_get.call_args.args[0]
+        assert "azure.com//openai" not in called_url
+
+    def test_invalid_key(self, monkeypatch):
+        monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://myresource.openai.azure.com")
+        with patch("main._http_get", return_value=_err(401)):
+            r = _check_azure_openai(FAKE_KEY)
         assert r["valid"] is False
 
 

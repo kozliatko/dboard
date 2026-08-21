@@ -832,6 +832,30 @@ def _check_openai(key: str, td: dict | None = None) -> dict:
     }
 
 
+def _check_azure_openai(key: str, td: dict | None = None) -> dict:
+    # Azure OpenAI is resource-scoped (no fixed api.openai.com-style host), so
+    # the resource endpoint travels alongside the key as a companion env var —
+    # same pattern as CLOUDFLARE_ACCOUNT_ID for Cloudflare.
+    endpoint = _companion_env(td or {}, "AZURE_OPENAI_ENDPOINT") if td else os.environ.get("AZURE_OPENAI_ENDPOINT", "").strip()
+    if not endpoint:
+        return {"valid": False, "detail": "AZURE_OPENAI_ENDPOINT not set"}
+    code, body, _ = _http_get(
+        f"{endpoint.rstrip('/')}/openai/deployments?api-version=2023-05-15",
+        headers={"api-key": key},
+    )
+    if code != 200:
+        return {"valid": False, "detail": f"HTTP {code}"}
+    deployments = json.loads(body).get("data", [])
+    names = [d.get("id", "") for d in deployments]
+    return {
+        "valid": True,
+        "detail": f"{len(deployments)} deployment{'s' if len(deployments) != 1 else ''}",
+        "extras": _extras(
+            ("Deployments", ", ".join(names)),
+        ),
+    }
+
+
 def _check_deepseek(key: str, td: dict | None = None) -> dict:
     ds_hdrs = {"Authorization": f"Bearer {key}"}
     code, body, _ = _http_get("https://api.deepseek.com/models", headers=ds_hdrs)
@@ -1148,6 +1172,7 @@ _TOKEN_DEFS = [
     {"id": "gitlab",    "name": "GitLab",    "env_var": "GITLAB_TOKEN",       "fn": _check_gitlab},
     {"id": "gemini",    "name": "Gemini",    "env_var": "GEMINI_API_KEY",     "fn": _check_gemini},
     {"id": "openai",    "name": "OpenAI",    "env_var": "OPENAI_API_KEY",     "fn": _check_openai},
+    {"id": "azure_openai", "name": "Azure OpenAI", "env_var": "AZURE_OPENAI_API_KEY", "fn": _check_azure_openai},
     {"id": "deepseek",  "name": "DeepSeek",  "env_var": "DEEPSEEK_API_KEY",   "fn": _check_deepseek},
     {"id": "mistral",   "name": "Mistral",   "env_var": "MISTRAL_API_KEY",    "fn": _check_mistral},
     {"id": "cloudflare",   "name": "Cloudflare AI",  "env_var": "CLOUDFLARE_API_TOKEN",  "fn": _check_cloudflare},

@@ -150,6 +150,8 @@ All variables are optional. Leave any blank to disable that token check.
 | `GITLAB_HOST` | GitLab instance hostname (default: `gitlab.com`) |
 | `GEMINI_API_KEY` | Google Gemini API key |
 | `OPENAI_API_KEY` | OpenAI API key |
+| `AZURE_OPENAI_ENDPOINT` | Azure OpenAI resource endpoint (required alongside `AZURE_OPENAI_API_KEY`), e.g. `https://myresource.openai.azure.com` |
+| `AZURE_OPENAI_API_KEY` | Azure OpenAI API key |
 | `DEEPSEEK_API_KEY` | DeepSeek API key |
 | `MISTRAL_API_KEY` | Mistral AI API key |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID (required alongside `CLOUDFLARE_API_TOKEN`) |
