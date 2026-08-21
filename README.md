@@ -338,24 +338,30 @@ All Docker networks on the host, with:
 - **Driver badge** — bridge, host, overlay, macvlan, null (color-coded)
 - **Internal / swarm badges** where applicable
 - **Container count** and expandable list of connected container names
+- **Filter input** — narrows cards by network name
 
-Networks are sorted by driver class (non-null first) then by container count descending.
+Networks are sorted by driver class (non-null first) then by container count descending; the filter doesn't change this order, only which cards are shown.
 
 ### Tokens
 
 Validates each configured API key on page load and caches results for 5 minutes.  
-A **↻ refresh** button forces immediate re-validation.
+A **↻ refresh** button forces immediate re-validation, and a filter input next
+to it narrows cards by provider name.
+
+Cards sort invalid/errored first (need attention), then valid, alphabetical within each group.
 
 Each card shows:
 - Green / red status dot
-- Key hint in the form `first4chars···last4chars` — the actual key is never rendered
+- Key hint in the form `first3chars···last2chars` — the actual key is never rendered
 - Service-specific metadata:
   - **Anthropic** — model count, latest model names, request rate limit
   - **GitHub** — username, repo counts, OAuth scopes, expiry, rate limit
   - **GitLab** — host, username, token name, scopes, expiry, last used
   - **Gemini** — model count, Gemini model names
   - **OpenAI** — model count, GPT model names
+  - **Azure OpenAI** — model count, how many support chat completion
   - **DeepSeek** — model names, account balance
+  - **Mistral** — model names
   - **Cloudflare AI** — model count, top task categories; daily neuron usage and remaining free-tier quota (requires **Account Analytics: Read** permission on the token; omitted silently if absent)
   - **Google Cloud** — project name, lifecycle state, service account email, key ID hint; validated via OAuth2 JWT assertion flow (RS256)
   - **Hugging Face** — username, plan (Free / PRO), token display name, permission scopes
@@ -378,12 +384,13 @@ Caddy (caddy-docker-proxy)
         └── GET /api/tokens       │
                                   ▼
 FastAPI (uvicorn, port 8000, non-root, read-only rootfs)
-  ├── ThreadPoolExecutor  — blocking docker/psutil/urllib calls
+  ├── asyncio.to_thread   — blocking docker/psutil calls run off the event loop
   ├── Background task     — SQLite pruner every 1 h
   ├── Background task     — metrics sampler every SAMPLE_INTERVAL s (optional)
-  ├── Docker SDK ─────────► socket-proxy (tcp:2375) ──► docker.sock  (GET only, POST blocked)
+  ├── Docker SDK ─────────► socket-proxy (tcp:2375) ──► docker.sock  (GET only, POST blocked;
+  │                          pooled connection, max 64)
   ├── psutil              — CPU/RAM/disk/net/temp
-  ├── urllib.request      — external token APIs (cached 5 min)
+  ├── httpx2 (pooled)     — external token APIs (cached 5 min)
   └── SQLite (WAL)        — /app/data/metrics.db
           ├── sys_metrics        (one row per /api/system call)
           └── container_metrics  (one row × container per /api/containers call)
@@ -393,15 +400,15 @@ FastAPI (uvicorn, port 8000, non-root, read-only rootfs)
 
 | Layer | Technology |
 |---|---|
-| Backend | Python 3.12, FastAPI, uvicorn |
+| Backend | Python 3.14, FastAPI, uvicorn |
 | Templating | Jinja2 |
 | System metrics | psutil |
 | Container metrics | Docker SDK for Python |
-| HTTP (token checks) | `urllib.request` (stdlib, no extra deps) |
+| HTTP (token checks) | `httpx2` — shared pooled client, `follow_redirects=False` |
 | Database | SQLite 3 (stdlib), WAL mode |
 | Frontend | Vanilla JS (external `app.js`), Tailwind CSS (self-hosted, built at image time) |
 | Docker API | Read-only via `tecnativa/docker-socket-proxy` |
-| Fonts | Outfit, JetBrains Mono (Google Fonts) |
+| Fonts | Outfit, JetBrains Mono (self-hosted, no third-party CDN) |
 | Charts | Inline SVG `<polyline>` — no chart library |
 
 ---
@@ -456,7 +463,7 @@ shared external `caddy` network.
 | Host filesystem disclosure | Only an empty probe dir on `/` and `/boot` are mounted read-only — **never the host root**. `/etc`, `/root`, `/home`, SSH keys and other projects' `.env` files are not visible to the container. |
 | Privilege escalation | Container runs as **non-root** (uid 10001), `cap_drop: ALL`, `no-new-privileges`, read-only root filesystem (`tmpfs` for `/tmp`). |
 | Unauthenticated access | All traffic is gated by Caddy **HTTP Basic Auth**. Note: containers *already on the shared `caddy` network* can still reach `dboard:8000` directly — treat that network as trusted. |
-| API key exposure | Keys read from environment; only a minimal redacted hint (`first4···last4`) is sent to the browser — never the raw key. Forced re-validation (`?refresh=true`) is throttled server-wide to protect upstream rate limits / paid balances. |
+| API key exposure | Keys read from environment; only a minimal redacted hint (`first3···last2`) is sent to the browser — never the raw key. Forced re-validation (`?refresh=true`) is throttled server-wide to protect upstream rate limits / paid balances. |
 | Cross-site scripting | All dynamic values are HTML-escaped. A strict **Content-Security-Policy** (`script-src 'self'`, no inline scripts, no third-party CDNs) is sent on every response, plus `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`. |
 | Supply chain | No runtime CDN — Tailwind is compiled to a static stylesheet at image build time. Python deps are pinned. CI runs **gitleaks** (secret scan) and **trivy** (vuln scan). |
 | Secrets in git | `.env` is in `.gitignore`; only `.env.example` (with empty values) is committed. |
