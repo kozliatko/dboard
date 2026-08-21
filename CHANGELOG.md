@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   list of available models. Configured via `MISTRAL_API_KEY`.
 - **Networks tab filter** — a filter input (matching the one on the
   Containers tables) narrows the network cards by name.
+- **Tokens tab filter** — same filter input next to the refresh button,
+  narrows token cards by provider name.
 - **Header sync indicator** — a small dot next to the clock pulses while a
   `/api/containers` + `/api/system` poll is in flight, so a slow refresh is
   visible instead of the dashboard looking frozen.

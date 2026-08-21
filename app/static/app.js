@@ -334,6 +334,7 @@
 
   const rawData = { proxied: [], others: [] };
   let rawNetworks = [];
+  let rawTokens = [];
   let sampleInterval = 5;   // seconds between samples (from the API)
   let retentionSecs = 86400;  // updated from API on first load
 
@@ -425,10 +426,20 @@
     }
     if (tabBtn)   tabBtn.style.display = '';
     if (tabPanel) tabPanel.style.display = '';
-    tokens = configured;
+    rawTokens = configured;
     const valid = configured.filter(t => t.valid).length;
     $('lbl-tokens').textContent = `${valid} valid / ${configured.length} configured`;
     $('badge-tokens').textContent = `${valid} / ${configured.length}`;
+    redrawTokens();
+  }
+
+  function redrawTokens() {
+    const q = ($('filter-tokens') || {value:''}).value.trim().toLowerCase();
+    const tokens = q ? rawTokens.filter(t => t.name.toLowerCase().includes(q)) : rawTokens;
+    if (!tokens.length) {
+      $('tok-grid').innerHTML = `<div class="mono" style="color:#374151;font-size:.8rem">no tokens match "${esc(($('filter-tokens')||{value:''}).value)}"</div>`;
+      return;
+    }
 
     $('tok-grid').innerHTML = tokens.map(t => {
       const cls = !t.configured ? 'unconfigured' : t.valid ? 'valid' : 'invalid';
@@ -1014,6 +1025,8 @@
   });
   const _netFilter = document.getElementById('filter-networks');
   if (_netFilter) _netFilter.addEventListener('input', () => redrawNetworks());
+  const _tokFilter = document.getElementById('filter-tokens');
+  if (_tokFilter) _tokFilter.addEventListener('input', () => redrawTokens());
   const _refreshBtn = document.getElementById('tok-refresh-btn');
   if (_refreshBtn) _refreshBtn.addEventListener('click', () => refreshTokens(true));
 
