@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Containers tables) narrows the network cards by name.
 - **Tokens tab filter** — same filter input next to the refresh button,
   narrows token cards by provider name.
+- **Tokens sorted invalid-first** — cards needing attention (invalid or
+  errored) sort above valid ones; each group is alphabetical by name.
 - **Header sync indicator** — a small dot next to the clock pulses while a
   `/api/containers` + `/api/system` poll is in flight, so a slow refresh is
   visible instead of the dashboard looking frozen.
