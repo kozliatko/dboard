@@ -10,6 +10,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Mistral API key validator** — validates via `GET /v1/models`; shows the
   list of available models. Configured via `MISTRAL_API_KEY`.
+- **Networks tab filter** — a filter input (matching the one on the
+  Containers tables) narrows the network cards by name.
+- **Header sync indicator** — a small dot next to the clock pulses while a
+  `/api/containers` + `/api/system` poll is in flight, so a slow refresh is
+  visible instead of the dashboard looking frozen.
+
+### Fixed
+- **Docker client never recovered from a mid-session failure** — if the
+  cached Docker client started failing after connecting successfully (e.g.
+  socket-proxy restarts), `_collect_containers()` returned an error forever
+  because nothing reset the cached client — `_dock()` only rebuilds when
+  called with none cached. It's now dropped on failure so the next poll
+  reconnects.
+- **`_db()` connection init had a narrow race** — two threads hitting the
+  very first call at once could each pass the `is None` check and open a
+  second, leaked SQLite connection. The check-and-init is now guarded by a
+  (reentrant) lock.
+
+### Security
+- **GCP token check no longer trusts `token_uri` from the credentials JSON**
+  — always uses `https://oauth2.googleapis.com/token` regardless of what the
+  (attacker-writable) creds claim, so a tampered `GOOGLE_CREDENTIALS_JSON`
+  can't redirect the signed JWT assertion to an arbitrary host.
+- **Tavily and GCP token checks moved off raw `urllib`** onto the shared,
+  pooled `httpx2` client (`follow_redirects=False`) used by every other
+  provider, for consistent redirect handling.
+- **Key hints show less of the key** — `_key_hint()` now reveals 3+2
+  characters instead of 4+4.
 
 ### Changed
 - **Non-blocking CPU sampling** — `psutil.cpu_percent()` is now called without

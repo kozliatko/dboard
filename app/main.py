@@ -7,8 +7,6 @@ import os
 import sqlite3
 import threading
 import time
-import urllib.error
-import urllib.request
 from collections import deque
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -148,6 +146,19 @@ def _dock():
                     log.warning("Docker connect failed (will retry): %s", e)
                     _docker = None
     return _docker
+
+
+def _docker_reset():
+    """Drop the cached client so the next _dock() call rebuilds it.
+
+    Without this, a client that connected successfully but later goes stale
+    (e.g. socket-proxy restarts) stays cached forever — _dock() only rebuilds
+    when _docker is None, so every subsequent poll would keep hitting the
+    same broken connection until the whole container restarts.
+    """
+    global _docker
+    with _docker_lock:
+        _docker = None
 
 
 # ── Background sampling ───────────────────────────────────────────────────────
@@ -427,17 +438,22 @@ _container_io_prev: dict[str, dict] = {}
 
 DB_PATH = "/app/data/metrics.db"
 _DB_RETENTION = int(os.getenv("RETENTION_HOURS", "24")) * 3600
-_db_lock = threading.Lock()
+# RLock (not Lock): every call site already does `with _db_lock: ... _db()`,
+# so _db() itself must be able to re-acquire the same lock for its
+# check-and-init below without deadlocking against the caller.
+_db_lock = threading.RLock()
 _db_conn: sqlite3.Connection | None = None
 
 
 def _db() -> sqlite3.Connection:
     global _db_conn
     if _db_conn is None:
-        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-        _db_conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-        _db_conn.execute("PRAGMA journal_mode=WAL")
-        _db_conn.execute("PRAGMA synchronous=NORMAL")
+        with _db_lock:
+            if _db_conn is None:
+                os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+                _db_conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+                _db_conn.execute("PRAGMA journal_mode=WAL")
+                _db_conn.execute("PRAGMA synchronous=NORMAL")
     return _db_conn
 
 
@@ -698,6 +714,15 @@ def _http_post(url: str, payload: dict, headers: dict | None = None, timeout: in
         return None, str(e), {}
 
 
+def _http_post_form(url: str, data: dict, headers: dict | None = None, timeout: int = 10) -> tuple[int | None, str, dict]:
+    """Like _http_post, but application/x-www-form-urlencoded (e.g. OAuth token requests)."""
+    try:
+        r = _http.post(url, data=data, headers=headers or {}, timeout=timeout)
+        return r.status_code, r.content.decode(errors="replace"), dict(r.headers)
+    except Exception as e:
+        return None, str(e), {}
+
+
 def _extras(*pairs) -> list[dict]:
     return [{"label": l, "value": v} for l, v in pairs if v not in (None, "", [])]
 
@@ -851,27 +876,20 @@ def _check_mistral(key: str, td: dict | None = None) -> dict:
 
 
 def _check_tavily(key: str, td: dict | None = None) -> dict:
-    data = json.dumps({"api_key": key, "query": "ping", "max_results": 1}).encode()
-    req = urllib.request.Request(
+    code, body, _ = _http_post(
         "https://api.tavily.com/search",
-        data=data,
-        headers={"Content-Type": "application/json"},
-        method="POST",
+        {"api_key": key, "query": "ping", "max_results": 1},
     )
-    try:
-        with urllib.request.urlopen(req, timeout=10) as r:
-            body = json.loads(r.read())
-            return {
-                "valid": True,
-                "detail": "search API OK",
-                "extras": _extras(
-                    ("Response time", f"{body.get('response_time', '?')} s"),
-                ),
-            }
-    except urllib.error.HTTPError as e:
-        return {"valid": False, "detail": f"HTTP {e.code}"}
-    except Exception as e:
-        return {"valid": False, "detail": str(e)}
+    if code != 200:
+        return {"valid": False, "detail": f"HTTP {code}"}
+    data = json.loads(body)
+    return {
+        "valid": True,
+        "detail": "search API OK",
+        "extras": _extras(
+            ("Response time", f"{data.get('response_time', '?')} s"),
+        ),
+    }
 
 
 def _check_cloudflare(key: str, td: dict | None = None) -> dict:
@@ -956,7 +974,10 @@ def _check_gcp(key: str, td: dict | None = None) -> dict:
     client_email = creds.get("client_email", "")
     project_id = creds.get("project_id", "")
     private_key = creds.get("private_key", "")
-    token_uri = creds.get("token_uri", "https://oauth2.googleapis.com/token")
+    # Always the real Google endpoint, regardless of what the credentials
+    # JSON claims — a `token_uri` taken from the (attacker-writable) creds
+    # would let a signed JWT assertion be POSTed to an arbitrary host.
+    token_uri = "https://oauth2.googleapis.com/token"
 
     if not (client_email and private_key):
         return {"valid": False, "detail": "missing client_email or private_key"}
@@ -978,22 +999,17 @@ def _check_gcp(key: str, td: dict | None = None) -> dict:
     except Exception as e:
         return {"valid": False, "detail": f"JWT signing failed: {e}"}
 
-    payload = f"grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion={assertion}"
-    data = payload.encode()
-    req = urllib.request.Request(
+    code, body, _ = _http_post_form(
         token_uri,
-        data=data,
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-        method="POST",
+        {"grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer", "assertion": assertion},
     )
-    try:
-        with urllib.request.urlopen(req, timeout=10) as r:
-            tok = json.loads(r.read().decode())
-    except urllib.error.HTTPError as e:
-        err = json.loads(e.read().decode()).get("error_description", f"HTTP {e.code}")
+    if code != 200:
+        try:
+            err = json.loads(body).get("error_description", f"HTTP {code}")
+        except Exception:
+            err = f"HTTP {code}"
         return {"valid": False, "detail": err}
-    except Exception as e:
-        return {"valid": False, "detail": str(e)}
+    tok = json.loads(body)
 
     access_token = tok.get("access_token", "")
     if not access_token:
@@ -1185,9 +1201,11 @@ _refresh_lock = threading.Lock()
 
 def _key_hint(key: str) -> str:
     # Reveal as little as possible: only enough to tell two keys apart.
-    if len(key) <= 12:
+    # 3+2 (rather than 4+4) limits how much of a provider-prefixed key
+    # (sk-, ghp_, hf_...) plus tail is exposed in the UI.
+    if len(key) <= 10:
         return "···"
-    return f"{key[:4]}···{key[-4:]}"
+    return f"{key[:3]}···{key[-2:]}"
 
 
 def _check_token_sync(td: dict) -> dict:
@@ -1478,6 +1496,10 @@ async def _collect_containers() -> dict:
     try:
         all_containers = d.containers.list(all=True)
     except Exception as e:
+        # The cached client itself may have gone stale (e.g. socket-proxy
+        # restarted) — drop it so the next poll rebuilds instead of hitting
+        # the same broken connection indefinitely.
+        _docker_reset()
         return {"error": str(e), "proxied": [], "others": [], "networks": []}
 
     proxied = []

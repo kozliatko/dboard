@@ -216,6 +216,16 @@
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
     .pulse { animation: pulse 1.8s ease-in-out infinite; }
 
+    /* Header sync indicator — visible feedback while a poll is in flight */
+    .sync-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #374151;
+      transition: background .2s;
+      flex-shrink: 0;
+    }
+    .sync-dot.busy { background: #8b5cf9; box-shadow: 0 0 6px #8b5cf988; animation: pulse 1s ease-in-out infinite; }
+
     /* System stats panel */
     .sys-grid {
       display: grid;
@@ -604,7 +614,10 @@
       </div>
       <p id="summary" class="text-sm text-gray-500" style="margin-left:2.375rem">loading…</p>
     </div>
-    <div id="clock" class="mono text-xs text-gray-600 shrink-0 mt-1"></div>
+    <div class="shrink-0 mt-1 flex items-center gap-1.5">
+      <span id="sync-dot" class="sync-dot" title="Refreshing…"></span>
+      <div id="clock" class="mono text-xs text-gray-600"></div>
+    </div>
   </header>
 
   <!-- Tab bar -->
@@ -716,6 +729,7 @@
   <div id="tab-networks" class="tab-panel">
     <div class="section-bar mb-4">
       <div class="section-title">Networks <span id="lbl-networks" class="text-gray-400 text-sm font-normal"></span></div>
+      <input id="filter-networks" type="text" class="filter-input" placeholder="Filter…">
     </div>
     <div id="networks-grid" class="net-grid"></div>
   </div>
