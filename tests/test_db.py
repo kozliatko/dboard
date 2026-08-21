@@ -42,6 +42,30 @@ def test_db_init_is_idempotent():
     main._db_init()  # second call must not raise
 
 
+def test_db_concurrent_first_call_returns_single_connection():
+    # _db()'s check-and-init wasn't guarded by _db_lock, so two threads
+    # racing on the very first call could each pass `_db_conn is None` and
+    # open a second, leaked connection. Guard against a regression.
+    import main
+    import threading as th
+
+    conns = []
+    barrier = th.Barrier(8)
+
+    def worker():
+        barrier.wait()
+        conns.append(main._db())
+
+    threads = [th.Thread(target=worker) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert len(conns) == 8
+    assert len({id(c) for c in conns}) == 1  # every thread got the same connection
+
+
 # ── sys_metrics writes ────────────────────────────────────────────────────────
 
 def test_write_sys_inserts_row():

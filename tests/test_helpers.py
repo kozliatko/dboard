@@ -77,8 +77,8 @@ class TestKeyHint:
     def test_normal_key(self):
         key = "sk-ant-api03-abcdefgh1234"
         hint = _key_hint(key)
-        assert hint.startswith("sk-a")
-        assert hint.endswith("1234")
+        assert hint.startswith("sk-")
+        assert hint.endswith("34")
         assert "···" in hint
         assert key not in hint
 
@@ -90,14 +90,14 @@ class TestKeyHint:
     def test_short_key_returns_placeholder(self):
         assert _key_hint("short") == "···"
 
-    def test_twelve_chars_returns_placeholder(self):
-        # boundary: keys of 12 chars or fewer reveal nothing
-        assert _key_hint("123456789012") == "···"
+    def test_ten_chars_returns_placeholder(self):
+        # boundary: keys of 10 chars or fewer reveal nothing
+        assert _key_hint("1234567890") == "···"
 
     def test_structure(self):
         hint = _key_hint("abcdefghijklmnop")
-        # first 4 + ··· + last 4
-        assert hint == "abcd···mnop"
+        # first 3 + ··· + last 2
+        assert hint == "abc···op"
 
 
 # ── _http_get / _http_post (httpx2 client) ────────────────────────────────────

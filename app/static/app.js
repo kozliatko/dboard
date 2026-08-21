@@ -333,6 +333,7 @@
   // ── Sort & filter ───────────────────────────────────────────────────────────
 
   const rawData = { proxied: [], others: [] };
+  let rawNetworks = [];
   let sampleInterval = 5;   // seconds between samples (from the API)
   let retentionSecs = 86400;  // updated from API on first load
 
@@ -913,6 +914,7 @@
   async function refresh() {
     if (refresh._busy) return;            // guard: never overlap polls
     refresh._busy = true;
+    $('sync-dot').classList.add('busy');
     let data, sys;
     try {
       [data, sys] = await Promise.all([
@@ -925,6 +927,7 @@
       return;
     } finally {
       refresh._busy = false;
+      $('sync-dot').classList.remove('busy');
     }
 
     hideError();
@@ -945,7 +948,8 @@
     updateDetail();   // keep the open overlay live
 
     $('section-proxied').hidden = rawData.proxied.length === 0;
-    renderNetworks(data.networks || []);
+    rawNetworks = data.networks || [];
+    redrawNetworks();
     $('lbl-proxied').textContent = `${data.running_proxied} running / ${rawData.proxied.length} total`;
     $('lbl-others').textContent  = `${data.running_others} running / ${rawData.others.length} total`;
     $('summary').textContent     = `${data.running_proxied} proxied running · ${data.running_others} other running`;
@@ -957,12 +961,27 @@
   }
 
   // ── Networks panel ───────────────────────────────────────────────────────────
-  function renderNetworks(nets) {
+  function redrawNetworks() {
+    const q = ($('filter-networks') || {value:''}).value.trim().toLowerCase();
+    const filtered = q ? rawNetworks.filter(n => n.name.toLowerCase().includes(q)) : rawNetworks;
+    renderNetworks(rawNetworks, filtered);
+  }
+
+  function renderNetworks(all, nets) {
     const grid = $('networks-grid');
-    if (!nets || nets.length === 0) { grid.innerHTML = ''; return; }
-    const totalConn = nets.reduce((s, n) => s + n.container_count, 0);
-    $('lbl-networks').textContent = `${nets.length} total · ${totalConn} connections`;
-    $('badge-networks').textContent = nets.length;
+    if (!all || all.length === 0) {
+      grid.innerHTML = '';
+      $('lbl-networks').textContent = '';
+      $('badge-networks').textContent = '';
+      return;
+    }
+    const totalConn = all.reduce((s, n) => s + n.container_count, 0);
+    $('lbl-networks').textContent = `${all.length} total · ${totalConn} connections`;
+    $('badge-networks').textContent = all.length;
+    if (nets.length === 0) {
+      grid.innerHTML = `<div class="mono" style="color:#374151;font-size:.8rem">no networks match "${esc(($('filter-networks')||{value:''}).value)}"</div>`;
+      return;
+    }
 
     const DRIVER_CLS = { bridge: 'bridge', host: 'host', overlay: 'overlay', macvlan: 'macvlan', null: 'null' };
     grid.innerHTML = nets.map(n => {
@@ -993,6 +1012,8 @@
     const inp = document.getElementById('filter-' + t);
     if (inp) inp.addEventListener('input', () => redraw(t));
   });
+  const _netFilter = document.getElementById('filter-networks');
+  if (_netFilter) _netFilter.addEventListener('input', () => redrawNetworks());
   const _refreshBtn = document.getElementById('tok-refresh-btn');
   if (_refreshBtn) _refreshBtn.addEventListener('click', () => refreshTokens(true));
 

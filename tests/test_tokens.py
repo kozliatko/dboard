@@ -191,22 +191,14 @@ class TestCheckMistral:
 
 class TestCheckTavily:
     def test_valid(self):
-        import urllib.error
-        from unittest.mock import MagicMock
-        mock_resp = MagicMock()
-        mock_resp.__enter__ = lambda s: s
-        mock_resp.__exit__ = MagicMock(return_value=False)
-        mock_resp.read.return_value = json.dumps({"response_time": 0.42}).encode()
-        with patch("urllib.request.urlopen", return_value=mock_resp):
+        with patch("main._http_post", return_value=_ok({"response_time": 0.42})):
             r = _check_tavily(FAKE_KEY)
         assert r["valid"] is True
         rt_extra = next(e for e in r["extras"] if e["label"] == "Response time")
         assert "0.42" in rt_extra["value"]
 
     def test_invalid_key(self):
-        import urllib.error
-        err = urllib.error.HTTPError(url="", code=401, msg="Unauthorized", hdrs={}, fp=None)
-        with patch("urllib.request.urlopen", side_effect=err):
+        with patch("main._http_post", return_value=_err(401)):
             r = _check_tavily(FAKE_KEY)
         assert r["valid"] is False
         assert "401" in r["detail"]
@@ -381,6 +373,33 @@ class TestCheckGCPEarlyRejections:
         r = _check_gcp(b64)
         assert r["valid"] is False
         assert "user_account" in r["detail"]  # parsed correctly, wrong type
+
+
+class TestCheckGCPTokenExchange:
+    CREDS = {
+        "type": "service_account",
+        "client_email": "svc@project.iam.gserviceaccount.com",
+        "private_key": "fake-key",
+        "project_id": "project",
+        "private_key_id": "keyid123",
+        # An attacker with write access to the creds JSON could point this
+        # elsewhere — _check_gcp must ignore it and always use Google's URL.
+        "token_uri": "https://evil.example.com/token",
+    }
+
+    def test_ignores_token_uri_from_creds(self):
+        with patch("jwt.encode", return_value="signed.jwt.assertion"), \
+             patch("main._http_post_form", return_value=_ok({"access_token": "tok123"})) as post_form, \
+             patch("main._http_get", return_value=_ok({"projectId": "project", "lifecycleState": "ACTIVE"})):
+            r = _check_gcp(json.dumps(self.CREDS))
+        assert r["valid"] is True
+        assert post_form.call_args.args[0] == "https://oauth2.googleapis.com/token"
+
+    def test_token_exchange_failure(self):
+        with patch("jwt.encode", return_value="signed.jwt.assertion"), \
+             patch("main._http_post_form", return_value=_err(400)):
+            r = _check_gcp(json.dumps(self.CREDS))
+        assert r["valid"] is False
 
 
 # ── _check_token_sync ─────────────────────────────────────────────────────────

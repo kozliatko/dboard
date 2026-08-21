@@ -161,6 +161,23 @@ class TestApiContainers:
         client.get("/api/containers")
         assert calls["n"] == 1  # only one full Docker scan per TTL window
 
+    def test_resets_stale_docker_client_on_failure(self, client, monkeypatch):
+        # A client that connected fine earlier can still go stale later (e.g.
+        # socket-proxy restarts). _dock() only rebuilds when _docker is None,
+        # so _collect_containers() must clear it on failure or every future
+        # poll would keep hitting the same broken connection forever.
+        import main
+
+        broken = MagicMock()
+        broken.containers.list.side_effect = Exception("connection reset")
+        monkeypatch.setattr(main, "_docker", broken)
+        monkeypatch.setattr(main, "_dock", lambda: broken)
+
+        r = client.get("/api/containers")
+        assert r.status_code == 200
+        assert "connection reset" in r.json()["error"]
+        assert main._docker is None
+
     def test_prunes_spark_for_removed_containers(self, client, monkeypatch):
         import main
         from collections import deque
