@@ -91,6 +91,23 @@ class TestCheckGitHub:
             r = _check_github(FAKE_KEY)
         assert r["valid"] is False
 
+    def test_exposes_expires_at_from_header(self):
+        hdrs = {"github-authentication-token-expiration": "2026-09-01 00:00:00 UTC"}
+        with patch("main._http_get", side_effect=[
+            (200, json.dumps(self.USER), hdrs),
+            (200, json.dumps(self.RL), {}),
+        ]):
+            r = _check_github(FAKE_KEY)
+        assert r["expires_at"] == "2026-09-01"
+
+    def test_expires_at_none_when_no_expiration_header(self):
+        with patch("main._http_get", side_effect=[
+            (200, json.dumps(self.USER), {}),
+            (200, json.dumps(self.RL), {}),
+        ]):
+            r = _check_github(FAKE_KEY)
+        assert r["expires_at"] is None
+
     def test_name_same_as_login_not_duplicated(self):
         user = {**self.USER, "name": "octocat"}  # name == login
         with patch("main._http_get", side_effect=[
@@ -268,6 +285,7 @@ class TestCheckGitLab:
         assert "Scopes" in labels
         assert "Expires" in labels
         assert "Host" in labels
+        assert r["expires_at"] == "2027-01-01"
 
     def test_valid_fallback_to_user_endpoint(self):
         # /personal_access_tokens/self returns 404, fallback to /user
@@ -278,6 +296,8 @@ class TestCheckGitLab:
             r = _check_gitlab(FAKE_KEY)
         assert r["valid"] is True
         assert "@vajda" in r["detail"]
+        # no token metadata available via this fallback path -> no expiry info
+        assert r.get("expires_at") is None
 
     def test_invalid_token(self):
         with patch("main._http_get", side_effect=[
@@ -472,6 +492,18 @@ class TestCheckTokenSync:
         assert result["detail"] == "ok"
         assert result["key_hint"] is not None
         assert "···" in result["key_hint"]
+        assert result["expires_at"] is None  # fn didn't return one
+
+    def test_propagates_expires_at(self, monkeypatch):
+        monkeypatch.setenv("TEST_SVC_KEY_FOR_SYNC_ABC", "sk-this-is-a-test-key-abcd")
+        td = {
+            "id": "test-svc",
+            "name": "Test Service",
+            "env_var": "TEST_SVC_KEY_FOR_SYNC_ABC",
+            "fn": lambda k, d: {"valid": True, "detail": "ok", "extras": [], "expires_at": "2026-09-01"},
+        }
+        result = _check_token_sync(td)
+        assert result["expires_at"] == "2026-09-01"
 
     def test_function_exception_is_caught(self, monkeypatch):
         monkeypatch.setenv("TEST_SVC_KEY_FOR_SYNC_ABC", "sk-this-is-a-test-key-abcd")

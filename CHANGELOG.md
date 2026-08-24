@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Token expiry highlighting** — GitHub and GitLab tokens (the only
+  providers that expose an expiry date) now get a distinct amber
+  "expiring soon" state once within 10 days of expiration, both in the
+  status dot/card border and a new `expires in Nd (YYYY-MM-DD)` line on
+  the card. Tokens tab sort order is now invalid → expiring soon → valid
+  (was invalid → valid). `_check_github`/`_check_gitlab` and
+  `_check_token_sync` expose the raw `expires_at` date so the frontend can
+  compute this itself.
+
 ## [0.3.16] - 2026-08-21
 
 ### Added

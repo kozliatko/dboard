@@ -348,10 +348,12 @@ Validates each configured API key on page load and caches results for 5 minutes.
 A **↻ refresh** button forces immediate re-validation, and a filter input next
 to it narrows cards by provider name.
 
-Cards sort invalid/errored first (need attention), then valid, alphabetical within each group.
+Cards sort invalid/errored first (need attention), then expiring soon, then
+valid, alphabetical within each group.
 
 Each card shows:
-- Green / red status dot
+- **Status dot** — green (valid), amber (valid but expiring within 10 days),
+  red (invalid/errored), grey (not configured)
 - Key hint in the form `first3chars···last2chars` — the actual key is never rendered
 - Service-specific metadata:
   - **Anthropic** — model count, latest model names, request rate limit
@@ -367,6 +369,10 @@ Each card shows:
   - **Hugging Face** — username, plan (Free / PRO), token display name, permission scopes
   - **Groq** — model count, Llama model names
   - **Tavily** — search API response time
+
+Only **GitHub** and **GitLab** currently expose a token expiry date; those
+are the only providers that can trigger the amber "expiring soon" state.
+Others show green/red only.
 
 ---
 
