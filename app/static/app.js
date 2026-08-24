@@ -414,6 +414,29 @@
 
   // ── Tokens ──────────────────────────────────────────────────────────────────
 
+  // Tokens with a known expiry (currently only GitHub/GitLab) get flagged
+  // once they're this close (or past) their expiration date.
+  const EXPIRY_WARN_DAYS = 10;
+
+  function daysUntilExpiry(dateStr) {
+    if (!dateStr) return null;
+    const expiry = new Date(dateStr + 'T00:00:00Z').getTime();
+    if (Number.isNaN(expiry)) return null;
+    const now = new Date();
+    const todayUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    return Math.round((expiry - todayUTC) / 86400000);
+  }
+
+  function tokenState(t) {
+    if (!t.configured) return 'unconfigured';
+    if (!t.valid) return 'invalid';
+    const days = daysUntilExpiry(t.expires_at);
+    if (days !== null && days <= EXPIRY_WARN_DAYS) return 'expiring';
+    return 'valid';
+  }
+
+  const TOKEN_SORT_TIER = { invalid: 0, expiring: 1, valid: 2 };
+
   function renderTokens(tokens) {
     const configured = tokens.filter(t => t.configured);
     const tabBtn = document.querySelector('[data-tab="tokens"]');
@@ -426,10 +449,12 @@
     }
     if (tabBtn)   tabBtn.style.display = '';
     if (tabPanel) tabPanel.style.display = '';
-    // Invalid first (needs attention), then alphabetical within each group.
-    rawTokens = configured.slice().sort((a, b) =>
-      (a.valid === b.valid) ? a.name.localeCompare(b.name) : (a.valid ? 1 : -1)
-    );
+    // Needs attention first (invalid, then expiring soon), then alphabetical
+    // within each group.
+    rawTokens = configured.slice().sort((a, b) => {
+      const ta = TOKEN_SORT_TIER[tokenState(a)], tb = TOKEN_SORT_TIER[tokenState(b)];
+      return ta !== tb ? ta - tb : a.name.localeCompare(b.name);
+    });
     const valid = configured.filter(t => t.valid).length;
     $('lbl-tokens').textContent = `${valid} valid / ${configured.length} configured`;
     $('badge-tokens').textContent = `${valid} / ${configured.length}`;
@@ -445,12 +470,18 @@
     }
 
     $('tok-grid').innerHTML = tokens.map(t => {
-      const cls = !t.configured ? 'unconfigured' : t.valid ? 'valid' : 'invalid';
-      const statusLabel = !t.configured ? 'not set' : t.valid ? 'valid' : 'invalid';
+      const cls = tokenState(t);
+      const days = daysUntilExpiry(t.expires_at);
+      const statusLabel = cls === 'unconfigured' ? 'not set'
+        : cls === 'expiring' ? (days < 0 ? 'expired' : `expires in ${days}d`)
+        : cls;
       const detail = t.error || t.detail || '—';
       const extras = t.extras || [];
       const checkedAt = t.checked_at
         ? `checked ${new Date(t.checked_at).toLocaleTimeString()}`
+        : '';
+      const expiryHtml = (t.configured && days !== null)
+        ? `<div class="tok-expiry ${cls}">${days < 0 ? `expired ${-days}d ago` : `expires in ${days}d`} (${esc(t.expires_at)})</div>`
         : '';
       const extrasHtml = extras.length
         ? `<div class="tok-extras">${extras.map(e =>
@@ -464,6 +495,7 @@
         </div>
         ${t.key_hint ? `<div class="tok-hint">${esc(t.key_hint)}</div>` : ''}
         <div class="tok-detail ${cls}">${esc(detail)}</div>
+        ${expiryHtml}
         ${extrasHtml}
         ${checkedAt ? `<div class="tok-checked">${checkedAt}</div>` : ''}
       </div>`;

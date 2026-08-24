@@ -789,6 +789,7 @@ def _check_github(key: str, td: dict | None = None) -> dict:
             ("Expires", expiry),
             ("Rate limit", f"{rl.get('remaining')} / {rl.get('limit')} req" if rl else None),
         ),
+        "expires_at": expiry or None,
     }
 
 
@@ -1167,6 +1168,7 @@ def _check_gitlab(key: str, td: dict | None = None) -> dict:
             ("Expires", expiry),
             ("Last used", (t.get("last_used_at") or "")[:10]),
         ),
+        "expires_at": expiry or None,
     }
 
 
@@ -1246,7 +1248,7 @@ def _check_token_sync(td: dict) -> dict:
         "key_hint": _key_hint(key) if key else None,
     }
     if not key:
-        return {**base, "configured": False, "valid": None, "detail": None, "extras": [], "checked_at": None, "error": None}
+        return {**base, "configured": False, "valid": None, "detail": None, "extras": [], "checked_at": None, "error": None, "expires_at": None}
     try:
         result = td["fn"](key, td)
         return {
@@ -1257,6 +1259,7 @@ def _check_token_sync(td: dict) -> dict:
             "extras": result.get("extras", []),
             "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "error": None,
+            "expires_at": result.get("expires_at"),
         }
     except Exception as e:
         return {
@@ -1267,6 +1270,7 @@ def _check_token_sync(td: dict) -> dict:
             "extras": [],
             "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "error": str(e),
+            "expires_at": None,
         }
 
 

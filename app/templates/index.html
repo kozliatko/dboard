@@ -330,6 +330,7 @@
       transition: border-color .2s;
     }
     .tok-card.valid   { border-left-color: #166534; }
+    .tok-card.expiring { border-left-color: #92400e; }
     .tok-card.invalid { border-left-color: #991b1b; }
     .tok-card.unconfigured { opacity: .45; }
     .tok-name {
@@ -349,6 +350,7 @@
       flex-shrink: 0;
     }
     .tok-status-dot.valid   { background: #4ade80; box-shadow: 0 0 6px #4ade8088; }
+    .tok-status-dot.expiring { background: #fbbf24; box-shadow: 0 0 6px #fbbf2488; }
     .tok-status-dot.invalid { background: #f87171; }
     .tok-status-dot.unconfigured { background: #374151; }
     .tok-hint {
@@ -365,6 +367,7 @@
       text-overflow: ellipsis;
     }
     .tok-detail.valid { color: #86efac; }
+    .tok-detail.expiring { color: #fcd34d; }
     .tok-detail.invalid { color: #fca5a5; }
     .tok-extras {
       margin-top: .5rem;
@@ -395,6 +398,13 @@
       color: #374151;
       margin-top: .4rem;
     }
+    .tok-expiry {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .65rem;
+      color: #6b7280;
+      margin-top: .3rem;
+    }
+    .tok-expiry.expiring { color: #fbbf24; }
     .refresh-btn {
       font-family: 'JetBrains Mono', monospace;
       font-size: .65rem;
