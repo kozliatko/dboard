@@ -160,6 +160,7 @@ All variables are optional. Leave any blank to disable that token check.
 | `HUGGINGFACE_TOKEN` | Hugging Face access token (`hf_…`) |
 | `GROQ_API_KEY` | Groq API key |
 | `TAVILY_API_KEY` | Tavily search API key |
+| `ELEVENLABS_API_KEY` | ElevenLabs API key |
 
 Copy `.env.example` to `.env` and populate the keys you want validated.
 
@@ -369,6 +370,7 @@ Each card shows:
   - **Hugging Face** — username, plan (Free / PRO), token display name, permission scopes
   - **Groq** — model count, Llama model names
   - **Tavily** — search API response time
+  - **ElevenLabs** — subscription tier, character usage / limit, status
 
 Only **GitHub** and **GitLab** currently expose a token expiry date; those
 are the only providers that can trigger the amber "expiring soon" state.

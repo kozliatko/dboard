@@ -921,6 +921,42 @@ def _check_tavily(key: str, td: dict | None = None) -> dict:
     }
 
 
+def _check_elevenlabs(key: str, td: dict | None = None) -> dict:
+    code, body, _ = _http_get(
+        "https://api.elevenlabs.io/v1/user",
+        headers={"xi-api-key": key},
+    )
+    if code == 200:
+        data = json.loads(body)
+        sub = data.get("subscription", {})
+        tier = sub.get("tier", "")
+        used, limit = sub.get("character_count"), sub.get("character_limit")
+        usage = f"{used} / {limit} chars" if used is not None and limit is not None else None
+        return {
+            "valid": True,
+            "detail": tier or "OK",
+            "extras": _extras(
+                ("Tier", tier),
+                ("Usage", usage),
+                ("Status", sub.get("status")),
+            ),
+        }
+    # A restricted/scoped ElevenLabs key authenticates fine but can lack the
+    # specific permission a given endpoint needs (e.g. `user_read`) — that's
+    # a valid key with limited scope, not a bad one, and shouldn't show red.
+    try:
+        err = json.loads(body).get("detail", {})
+    except Exception:
+        err = {}
+    if err.get("status") == "missing_permissions":
+        return {
+            "valid": True,
+            "detail": "restricted key",
+            "extras": _extras(("Missing permission", err.get("message"))),
+        }
+    return {"valid": False, "detail": f"HTTP {code}"}
+
+
 def _check_cloudflare(key: str, td: dict | None = None) -> dict:
     account_id = _companion_env(td or {}, "CLOUDFLARE_ACCOUNT_ID") if td else os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
     if not account_id:
@@ -1186,6 +1222,7 @@ _TOKEN_DEFS = [
     {"id": "huggingface",  "name": "Hugging Face",   "env_var": "HUGGINGFACE_TOKEN",      "fn": _check_huggingface},
     {"id": "groq",         "name": "Groq",           "env_var": "GROQ_API_KEY",           "fn": _check_groq},
     {"id": "tavily",    "name": "Tavily",    "env_var": "TAVILY_API_KEY",     "fn": _check_tavily},
+    {"id": "elevenlabs", "name": "ElevenLabs", "env_var": "ELEVENLABS_API_KEY", "fn": _check_elevenlabs},
 ]
 
 

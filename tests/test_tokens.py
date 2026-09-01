@@ -13,6 +13,7 @@ from main import (
     _check_deepseek,
     _check_mistral,
     _check_tavily,
+    _check_elevenlabs,
     _check_gitlab,
     _check_huggingface,
     _check_groq,
@@ -259,6 +260,48 @@ class TestCheckTavily:
             r = _check_tavily(FAKE_KEY)
         assert r["valid"] is False
         assert "401" in r["detail"]
+
+
+# ── ElevenLabs ────────────────────────────────────────────────────────────────
+
+class TestCheckElevenLabs:
+    def test_valid(self):
+        body = {"subscription": {
+            "tier": "creator",
+            "character_count": 12000,
+            "character_limit": 100000,
+            "status": "active",
+        }}
+        with patch("main._http_get", return_value=_ok(body)) as http_get:
+            r = _check_elevenlabs(FAKE_KEY)
+        assert r["valid"] is True
+        assert r["detail"] == "creator"
+        usage_extra = next(e for e in r["extras"] if e["label"] == "Usage")
+        assert "12000 / 100000" in usage_extra["value"]
+        assert http_get.call_args.kwargs["headers"] == {"xi-api-key": FAKE_KEY}
+
+    def test_invalid_key(self):
+        with patch("main._http_get", return_value=_err(401)):
+            r = _check_elevenlabs(FAKE_KEY)
+        assert r["valid"] is False
+        assert "401" in r["detail"]
+
+    def test_restricted_key_treated_as_valid(self):
+        # A scoped/restricted ElevenLabs key authenticates fine but can lack
+        # the specific permission an endpoint needs — that's a valid key
+        # with limited scope, not a bad one. Confirmed against a real
+        # restricted key in production: ElevenLabs returns 401 with
+        # status "missing_permissions", not "invalid_api_key".
+        body = {"detail": {
+            "status": "missing_permissions",
+            "message": "The API key you used is missing the permission user_read to execute this operation.",
+        }}
+        with patch("main._http_get", return_value=(401, json.dumps(body), {})):
+            r = _check_elevenlabs(FAKE_KEY)
+        assert r["valid"] is True
+        assert "restricted" in r["detail"]
+        perm_extra = next(e for e in r["extras"] if e["label"] == "Missing permission")
+        assert "user_read" in perm_extra["value"]
 
 
 # ── GitLab ────────────────────────────────────────────────────────────────────
