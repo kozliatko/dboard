@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **ElevenLabs API key validator** — validates via `GET /v1/user`; shows
+  subscription tier, character usage/limit, and account status. Configured
+  via `ELEVENLABS_API_KEY`. A scoped/restricted key that authenticates but
+  lacks the `user_read` permission (ElevenLabs' `missing_permissions`
+  response) is shown as a valid key with limited scope, not a red
+  "invalid" — confirmed against a real restricted key in production.
 - **Token expiry highlighting** — GitHub and GitLab tokens (the only
   providers that expose an expiry date) now get a distinct amber
   "expiring soon" state once within 10 days of expiration, both in the
