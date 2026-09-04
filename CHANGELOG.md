@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the header updated correctly, giving no visual sign anything was wrong,
   but the row order never actually changed to match. The group/name
   default now only applies when no column sort is active.
+- **Stale frontend served from an outdated Service Worker cache** —
+  `sw.js` `CACHE_NAME` hadn't been bumped since v5 despite several
+  deploys since (ElevenLabs provider, the sort fix above) changing
+  `index.html`/`app.js`, so browsers with an already-installed Service
+  Worker kept serving an old cached shell (stale version/commit shown in
+  the header) instead of picking up those changes. Bumped to v6.
 
 ### Added
 - **ElevenLabs API key validator** — validates via `GET /v1/user`; shows
