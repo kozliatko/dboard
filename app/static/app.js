@@ -33,9 +33,37 @@
 
   // ── Render helpers ──────────────────────────────────────────────────────────
 
-  function badge(status) {
-    const cls = STATUSES.includes(status) ? status : 'dead';
-    return `<span class="badge badge-${cls}"><span class="badge-dot"></span>${esc(status)}</span>`;
+  // Status badge for a container row. "exited" gets refined further using
+  // exit_kind (from the backend: exit code + restart policy) so a clean
+  // one-shot job (e.g. a migration container, restart: "no", exit 0) isn't
+  // painted the same alarming red as an actual crash.
+  function statusLabel(c) {
+    if (c.status !== 'exited') return c.status;
+    if (c.exit_kind === 'one_shot') return 'done';
+    if (c.exit_kind === 'unexpected_stop') return 'stopped';
+    return 'crashed';
+  }
+
+  function badge(c) {
+    const status = c.status;
+    let cls = STATUSES.includes(status) ? status : 'dead';
+    let title = status;
+    if (status === 'exited') {
+      if (c.exit_kind === 'one_shot') {
+        cls = 'oneshot';
+        title = 'ran to completion (exit 0) — not meant to keep running';
+      } else if (c.exit_kind === 'unexpected_stop') {
+        cls = 'unexpected';
+        title = 'exited cleanly, but has a restart policy — not being restarted';
+      } else {
+        title = c.exit_code != null ? `exited with code ${c.exit_code}` : 'exited unexpectedly';
+      }
+    }
+    const label = statusLabel(c);
+    const restartFlag = c.restart_count > 0
+      ? `<span class="restart-flag" title="Docker restarted this container ${c.restart_count}×">⟳${c.restart_count}</span>`
+      : '';
+    return `<span class="badge badge-${cls}" title="${esc(title)}"><span class="badge-dot"></span>${esc(label)}</span>${restartFlag}`;
   }
 
   function barColor(pct) {
@@ -114,7 +142,7 @@
         .map(d => `<a href="https://${esc(d)}" target="_blank" class="chip">${esc(d)}</a>`)
         .join('') || '<span class="text-gray-700 text-xs mono">—</span>';
       return `<tr class="${rowLevel(c)} row-click" data-cname="${esc(c.name)}">
-        <td>${badge(c.status)}</td>
+        <td>${badge(c)}</td>
         <td>${groupBadge(c.group)}<span class="font-semibold text-white text-sm">${esc(c.name)}</span></td>
         <td style="max-width:260px">${chips}</td>
         <td class="hidden sm:table-cell mono text-xs text-gray-500" style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${esc(c.image)}">${esc(c.image)}</td>
@@ -135,7 +163,7 @@
       rows = [...rows].sort((a,b) => (a.group||'').localeCompare(b.group||'') || a.name.localeCompare(b.name));
     }
     return rows.map(c => `<tr class="${rowLevel(c)} row-click" data-cname="${esc(c.name)}">
-      <td>${badge(c.status)}</td>
+      <td>${badge(c)}</td>
       <td>${groupBadge(c.group)}<span class="font-semibold text-white text-sm">${esc(c.name)}</span></td>
       <td class="mono text-xs text-gray-500" style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${esc(c.image)}">${esc(c.image)}</td>
       <td>${healthBadge(c.health)}</td>
@@ -384,6 +412,7 @@
       c.name.toLowerCase().includes(lq) ||
       (c.image||'').toLowerCase().includes(lq) ||
       (c.status||'').toLowerCase().includes(lq) ||
+      statusLabel(c).toLowerCase().includes(lq) ||  // "done"/"stopped"/"crashed"
       (c.health||'').toLowerCase().includes(lq) ||
       (c.domains||[]).some(d => d.toLowerCase().includes(lq))
     );

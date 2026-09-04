@@ -4,7 +4,7 @@ from datetime import datetime, timezone, timedelta
 from unittest.mock import MagicMock, patch
 from main import (
     _extract_domains, _fmt_uptime, _key_hint, _extras, _uptime,
-    _stats_sync, _image_name, _networks_sync,
+    _stats_sync, _image_name, _networks_sync, _exit_kind,
 )
 
 
@@ -214,6 +214,36 @@ class TestUptime:
         assert "m" in result
         assert "h" not in result
         assert "d" not in result
+
+
+# ── _exit_kind ────────────────────────────────────────────────────────────────
+
+class TestExitKind:
+    def test_running_is_none(self):
+        assert _exit_kind("running", None, "no") is None
+
+    def test_restarting_is_none(self):
+        assert _exit_kind("restarting", None, "always") is None
+
+    def test_clean_one_shot(self):
+        # e.g. a migration job: restart: "no", exit code 0 — expected, not a problem
+        assert _exit_kind("exited", 0, "no") == "one_shot"
+
+    def test_clean_exit_but_should_be_running(self):
+        # has a restart policy other than "no" yet is stopped and not being
+        # brought back — worth flagging even though the exit itself was clean
+        assert _exit_kind("exited", 0, "unless-stopped") == "unexpected_stop"
+        assert _exit_kind("exited", 0, "always") == "unexpected_stop"
+        assert _exit_kind("exited", 0, "on-failure") == "unexpected_stop"
+
+    def test_nonzero_exit_is_crashed(self):
+        assert _exit_kind("exited", 1, "no") == "crashed"
+        assert _exit_kind("exited", 137, "always") == "crashed"
+
+    def test_missing_exit_code_treated_as_crashed(self):
+        # Docker didn't report a code (e.g. OOMKilled edge cases) — don't
+        # silently call it a clean one-shot.
+        assert _exit_kind("exited", None, "no") == "crashed"
 
 
 # ── _read_version ─────────────────────────────────────────────────────────────

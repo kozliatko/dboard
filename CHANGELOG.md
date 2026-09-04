@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Exited containers distinguish one-shot jobs from real crashes** — a
+  new `exit_kind` (`one_shot` / `unexpected_stop` / `crashed`), derived
+  server-side from the container's exit code and restart policy, drives a
+  new status badge: a clean, intentional job (e.g. a DB migration
+  container with `restart: "no"`, exit code `0`) now shows a neutral blue
+  "done" instead of the same alarming red as a real crash. A container
+  with a restart policy that exited cleanly but isn't being brought back
+  shows amber "stopped"; a non-zero exit still shows red "crashed". A
+  small `⟳N` flag next to the badge flags containers Docker has
+  restarted, even while currently running. Both the raw Docker status and
+  the refined label are filterable on the Containers tables.
+
 ### Fixed
 - **Container table header-click sorting had no effect** — `renderProxied()`
   and `renderOthers()` unconditionally re-sorted rows by (group, name)
