@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.17] - 2026-09-04
+
 ### Added
 - **Exited containers distinguish one-shot jobs from real crashes** — a
   new `exit_kind` (`one_shot` / `unexpected_stop` / `crashed`), derived
@@ -19,23 +21,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   small `⟳N` flag next to the badge flags containers Docker has
   restarted, even while currently running. Both the raw Docker status and
   the refined label are filterable on the Containers tables.
-
-### Fixed
-- **Container table header-click sorting had no effect** — `renderProxied()`
-  and `renderOthers()` unconditionally re-sorted rows by (group, name)
-  before rendering, silently overwriting whatever order a header click had
-  just produced via `applySort()`. The sort direction indicator (↑/↓) on
-  the header updated correctly, giving no visual sign anything was wrong,
-  but the row order never actually changed to match. The group/name
-  default now only applies when no column sort is active.
-- **Stale frontend served from an outdated Service Worker cache** —
-  `sw.js` `CACHE_NAME` hadn't been bumped since v5 despite several
-  deploys since (ElevenLabs provider, the sort fix above) changing
-  `index.html`/`app.js`, so browsers with an already-installed Service
-  Worker kept serving an old cached shell (stale version/commit shown in
-  the header) instead of picking up those changes. Bumped to v6.
-
-### Added
 - **ElevenLabs API key validator** — validates via `GET /v1/user`; shows
   subscription tier, character usage/limit, and account status. Configured
   via `ELEVENLABS_API_KEY`. A scoped/restricted key that authenticates but
@@ -50,6 +35,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (was invalid → valid). `_check_github`/`_check_gitlab` and
   `_check_token_sync` expose the raw `expires_at` date so the frontend can
   compute this itself.
+
+### Fixed
+- **Container table header-click sorting had no effect** — `renderProxied()`
+  and `renderOthers()` unconditionally re-sorted rows by (group, name)
+  before rendering, silently overwriting whatever order a header click had
+  just produced via `applySort()`. The sort direction indicator (↑/↓) on
+  the header updated correctly, giving no visual sign anything was wrong,
+  but the row order never actually changed to match. The group/name
+  default now only applies when no column sort is active.
+- **Stale frontend served from an outdated Service Worker cache** —
+  `sw.js` `CACHE_NAME` hadn't been bumped since v5 despite several
+  deploys since (ElevenLabs provider, the sort fix above) changing
+  `index.html`/`app.js`, so browsers with an already-installed Service
+  Worker kept serving an old cached shell (stale version/commit shown in
+  the header) instead of picking up those changes. Bumped to v6, then to
+  v7 for the exit-kind feature above.
 
 ## [0.3.16] - 2026-08-21
 
@@ -472,7 +473,8 @@ Initial release.
 - 57 unit tests covering helpers, token validators and the persistence layer.
 - Anonymized dashboard screenshots in the documentation.
 
-[Unreleased]: https://github.com/kozliatko/dboard/compare/v0.3.16...HEAD
+[Unreleased]: https://github.com/kozliatko/dboard/compare/v0.3.17...HEAD
+[0.3.17]: https://github.com/kozliatko/dboard/compare/v0.3.16...v0.3.17
 [0.3.16]: https://github.com/kozliatko/dboard/compare/v0.3.15...v0.3.16
 [0.3.15]: https://github.com/kozliatko/dboard/compare/v0.3.14...v0.3.15
 [0.3.14]: https://github.com/kozliatko/dboard/compare/v0.3.13...v0.3.14
