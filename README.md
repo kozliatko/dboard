@@ -10,8 +10,8 @@ Monitors containers, host system metrics, and API token validity — all in one 
 [![Snyk security](https://snyk.io/test/github/kozliatko/dboard/badge.svg)](https://snyk.io/test/github/kozliatko/dboard)
 [![codecov](https://codecov.io/gh/kozliatko/dboard/branch/main/graph/badge.svg)](https://codecov.io/gh/kozliatko/dboard)
 ![Version](https://img.shields.io/github/v/release/kozliatko/dboard)
-![Python](https://img.shields.io/badge/python-3.12-blue)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.138-green)
+![Python](https://img.shields.io/badge/python-3.14-blue)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.141-green)
 ![SQLite](https://img.shields.io/badge/SQLite-WAL-orange)
 ![PWA](https://img.shields.io/badge/PWA-5A0FC8?logo=pwa&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -293,6 +293,25 @@ Both tables support:
 - **Per-row color coding** — orange left border at ≥75% resource usage, red background at ≥90%
 - **Sparklines** in CPU and RAM columns (last ~100 s of history)
 - **Group dots** — a small colored dot before each container name indicates its group; containers are sorted by group, then by name
+
+#### Exited containers: one-shot job vs. crash
+
+A container that has stopped (Docker status `exited`) isn't necessarily a
+problem — a one-off job (a DB migration, a cron-style task) is *supposed* to
+exit. The status badge distinguishes why, using the container's exit code
+and restart policy:
+
+| Badge | Meaning |
+|---|---|
+| 🟦 **done** | Exited with code `0` and has no restart policy (`restart: "no"`) — ran to completion as intended. |
+| 🟨 **stopped** | Exited with code `0` but *does* have a restart policy — Docker isn't bringing it back (manual stop, or an `on-failure` policy that gave up). Worth a look. |
+| 🟥 **crashed** | Exited with a non-zero code — a real failure. |
+
+A container that Docker has restarted (crash-looped) shows a small `⟳N`
+flag next to its status badge — even while currently `running` — so a
+container that's up right now but has restarted a few times isn't mistaken
+for one that's been stable the whole time. Both the refined status label
+(`done` / `stopped` / `crashed`) and the raw Docker status are filterable.
 
 #### Container grouping
 

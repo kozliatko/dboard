@@ -326,6 +326,26 @@ def _uptime(started_at: str) -> str | None:
         return None
 
 
+def _exit_kind(status: str, exit_code: int | None, restart_policy: str) -> str | None:
+    """Classify why a stopped container is stopped, so the UI doesn't paint
+    an intentional one-shot job (e.g. a migration container: `restart: "no"`,
+    exit code 0) the same alarming red as an actual crash.
+
+    Only meaningful for status == "exited"; returns None otherwise.
+    - "one_shot": ran to completion successfully and was never meant to stay
+      up (restart policy "no") — expected, not a problem.
+    - "unexpected_stop": exited cleanly but *should* be running (has a
+      restart policy other than "no") — Docker isn't bringing it back
+      (manual stop, or an on-failure policy that gave up).
+    - "crashed": exited with a non-zero code — a real failure.
+    """
+    if status != "exited":
+        return None
+    if exit_code == 0:
+        return "one_shot" if restart_policy == "no" else "unexpected_stop"
+    return "crashed"
+
+
 def _image_name(container) -> str:
     # Prefer the image reference already present in the container's attrs
     # (fetched with containers.list) to avoid an extra /images/{id}/json
@@ -1595,6 +1615,9 @@ async def _collect_containers() -> dict:
             or labels.get("com.docker.compose.project")
             or ""
         )
+        restart_policy = c.attrs.get("HostConfig", {}).get("RestartPolicy", {}).get("Name", "no")
+        restart_count = c.attrs.get("RestartCount", 0)
+        exit_code = state.get("ExitCode") if c.status == "exited" else None
         entry = {
             "_id": c.id,
             "name": c.name.lstrip("/"),
@@ -1605,6 +1628,9 @@ async def _collect_containers() -> dict:
             "uptime": _uptime(state.get("StartedAt", "")) if c.status == "running" else None,
             "networks": sorted(net_settings.keys()),
             "group": group,
+            "exit_code": exit_code,
+            "restart_count": restart_count,
+            "exit_kind": _exit_kind(c.status, exit_code, restart_policy),
         }
 
         if c.status == "running":

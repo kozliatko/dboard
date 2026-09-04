@@ -105,6 +105,20 @@
     .badge-restarting .badge-dot { background:#60a5fa; }
     .badge-dead       { background:#1a1a1a; color:#6b7280; border:1px solid #374151; }
     .badge-dead .badge-dot { background:#4b5563; }
+    /* exited, but ran-to-completion on purpose (restart: "no", exit 0) —
+       neutral, not alarming like a real crash */
+    .badge-oneshot    { background:#0d1a2b; color:#93c5fd; border:1px solid #1e3a5f; }
+    .badge-oneshot .badge-dot { background:#93c5fd; }
+    /* exited cleanly but has a restart policy that should have brought it
+       back up — worth a look, distinct from both "fine" and "crashed" */
+    .badge-unexpected { background:#2b250d; color:#fbbf24; border:1px solid #92400e; }
+    .badge-unexpected .badge-dot { background:#fbbf24; }
+    .restart-flag {
+      margin-left: .3rem;
+      font-size: .62rem;
+      color: #60a5fa;
+      font-family: 'JetBrains Mono', monospace;
+    }
 
     /* Health */
     .h-healthy   { color:#4ade80; }

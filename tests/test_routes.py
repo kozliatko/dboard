@@ -3,15 +3,18 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 
-def _stopped_container(name="myapp", image="nginx:alpine", has_caddy=False):
+def _stopped_container(name="myapp", image="nginx:alpine", has_caddy=False,
+                        exit_code=None, restart_policy="no", restart_count=0):
     c = MagicMock()
     c.id = "abc123def456"
     c.name = f"/{name}"
     c.status = "exited"
     c.labels = {"caddy": f"{name}.example.com"} if has_caddy else {}
     c.attrs = {
-        "State": {"Health": None, "StartedAt": ""},
+        "State": {"Health": None, "StartedAt": "", "ExitCode": exit_code},
         "NetworkSettings": {"Networks": {}},
+        "HostConfig": {"RestartPolicy": {"Name": restart_policy}},
+        "RestartCount": restart_count,
     }
     c.image.tags = [image]
     c.image.attrs = {"RepoDigests": []}
@@ -128,6 +131,23 @@ class TestApiContainers:
         assert data["others"][0]["name"] == "web"
         assert len(data["proxied"]) == 1
         assert data["proxied"][0]["name"] == "proxy"
+
+    def test_one_shot_container_not_shown_as_crashed(self, client, monkeypatch):
+        import main
+        migration = _stopped_container("db-migrate", exit_code=0, restart_policy="no")
+        crashed = _stopped_container("worker", exit_code=1, restart_policy="always", restart_count=3)
+        monkeypatch.setattr(main, "_dock", lambda: _mock_docker([migration, crashed]))
+
+        r = client.get("/api/containers")
+        data = r.json()
+        by_name = {c["name"]: c for c in data["others"]}
+
+        assert by_name["db-migrate"]["exit_kind"] == "one_shot"
+        assert by_name["db-migrate"]["exit_code"] == 0
+
+        assert by_name["worker"]["exit_kind"] == "crashed"
+        assert by_name["worker"]["exit_code"] == 1
+        assert by_name["worker"]["restart_count"] == 3
 
     def test_response_includes_metadata(self, client, monkeypatch):
         import main
