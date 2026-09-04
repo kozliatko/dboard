@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Container table header-click sorting had no effect** — `renderProxied()`
+  and `renderOthers()` unconditionally re-sorted rows by (group, name)
+  before rendering, silently overwriting whatever order a header click had
+  just produced via `applySort()`. The sort direction indicator (↑/↓) on
+  the header updated correctly, giving no visual sign anything was wrong,
+  but the row order never actually changed to match. The group/name
+  default now only applies when no column sort is active.
+
 ### Added
 - **ElevenLabs API key validator** — validates via `GET /v1/user`; shows
   subscription tier, character usage/limit, and account status. Configured

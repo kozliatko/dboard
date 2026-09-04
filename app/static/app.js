@@ -102,7 +102,13 @@
 
   function renderProxied(rows) {
     if (!rows.length) return '<tr class="empty-row"><td colspan="9">No matching containers</td></tr>';
-    rows = [...rows].sort((a,b) => (a.group||'').localeCompare(b.group||'') || a.name.localeCompare(b.name));
+    // Default (no column sort active): group by project, then name. A click
+    // on a column header already sorted `rows` via applySort() — re-sorting
+    // here would silently discard that and explains why header clicks used
+    // to appear to do nothing.
+    if (!sortState.proxied.col) {
+      rows = [...rows].sort((a,b) => (a.group||'').localeCompare(b.group||'') || a.name.localeCompare(b.name));
+    }
     return rows.map(c => {
       const chips = (c.domains||[])
         .map(d => `<a href="https://${esc(d)}" target="_blank" class="chip">${esc(d)}</a>`)
@@ -123,7 +129,11 @@
 
   function renderOthers(rows) {
     if (!rows.length) return '<tr class="empty-row"><td colspan="8">No matching containers</td></tr>';
-    rows = [...rows].sort((a,b) => (a.group||'').localeCompare(b.group||'') || a.name.localeCompare(b.name));
+    // See renderProxied() — only impose the default group/name order when
+    // no column header sort is active, otherwise it overrides applySort().
+    if (!sortState.others.col) {
+      rows = [...rows].sort((a,b) => (a.group||'').localeCompare(b.group||'') || a.name.localeCompare(b.name));
+    }
     return rows.map(c => `<tr class="${rowLevel(c)} row-click" data-cname="${esc(c.name)}">
       <td>${badge(c.status)}</td>
       <td>${groupBadge(c.group)}<span class="font-semibold text-white text-sm">${esc(c.name)}</span></td>
