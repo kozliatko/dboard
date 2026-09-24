@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Scaleway API key validator** — authentication-only check via
+  `GET /iam/v1alpha1/api-keys`. A bare Scaleway secret key has no
+  organization context by itself, so there's no self-contained "list my
+  account" endpoint; confirmed against a real key that Scaleway checks
+  authentication *before* validating the required `organization_id`
+  argument, so a bad/revoked key gets `HTTP 401` while a good key gets
+  `HTTP 400` ("organization_id required") — that distinction is enough to
+  validate the key without further configuration. Configured via
+  `SCALEWAY_API_KEY`.
+
 ## [0.3.17] - 2026-09-04
 
 ### Added

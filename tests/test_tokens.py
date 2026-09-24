@@ -14,6 +14,7 @@ from main import (
     _check_mistral,
     _check_tavily,
     _check_elevenlabs,
+    _check_scaleway,
     _check_gitlab,
     _check_huggingface,
     _check_groq,
@@ -302,6 +303,36 @@ class TestCheckElevenLabs:
         assert "restricted" in r["detail"]
         perm_extra = next(e for e in r["extras"] if e["label"] == "Missing permission")
         assert "user_read" in perm_extra["value"]
+
+
+# ── Scaleway ──────────────────────────────────────────────────────────────────
+
+class TestCheckScaleway:
+    def test_valid_key_gets_400_not_401(self):
+        # Confirmed against a real key: Scaleway's IAM API checks
+        # authentication before validating that organization_id is present,
+        # so a good key gets HTTP 400 ("organization_id required") here,
+        # never a 200 — a bare secret key has no org context by itself.
+        body = {"details": [{"argument_name": "organization_id", "reason": "required"}],
+                "message": "invalid argument(s)"}
+        with patch("main._http_get", return_value=(400, json.dumps(body), {})) as http_get:
+            r = _check_scaleway(FAKE_KEY)
+        assert r["valid"] is True
+        assert http_get.call_args.kwargs["headers"] == {"X-Auth-Token": FAKE_KEY}
+
+    def test_invalid_key(self):
+        # A bad/revoked key gets a distinct 401 "denied_authentication".
+        body = {"message": "authentication is denied", "reason": "not_found"}
+        with patch("main._http_get", return_value=(401, json.dumps(body), {})):
+            r = _check_scaleway(FAKE_KEY)
+        assert r["valid"] is False
+        assert "401" in r["detail"]
+
+    def test_network_error(self):
+        with patch("main._http_get", return_value=(None, "Connection refused", {})):
+            r = _check_scaleway(FAKE_KEY)
+        assert r["valid"] is False
+        assert "Connection refused" in r["detail"]
 
 
 # ── GitLab ────────────────────────────────────────────────────────────────────
