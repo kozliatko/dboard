@@ -161,6 +161,7 @@ All variables are optional. Leave any blank to disable that token check.
 | `GROQ_API_KEY` | Groq API key |
 | `TAVILY_API_KEY` | Tavily search API key |
 | `ELEVENLABS_API_KEY` | ElevenLabs API key |
+| `SCALEWAY_API_KEY` | Scaleway secret key |
 
 Copy `.env.example` to `.env` and populate the keys you want validated.
 
@@ -390,6 +391,9 @@ Each card shows:
   - **Groq** — model count, Llama model names
   - **Tavily** — search API response time
   - **ElevenLabs** — subscription tier, character usage / limit, status
+  - **Scaleway** — authentication only (a bare secret key has no
+    organization context, so there's nothing else to show without
+    additional configuration)
 
 Only **GitHub** and **GitLab** currently expose a token expiry date; those
 are the only providers that can trigger the amber "expiring soon" state.

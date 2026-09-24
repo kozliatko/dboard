@@ -977,6 +977,25 @@ def _check_elevenlabs(key: str, td: dict | None = None) -> dict:
     return {"valid": False, "detail": f"HTTP {code}"}
 
 
+def _check_scaleway(key: str, td: dict | None = None) -> dict:
+    # Scaleway secret keys aren't org-scoped by themselves, so there's no
+    # bare "list my account" endpoint. Every IAM endpoint requires an
+    # organization_id we don't have — but confirmed against a real key:
+    # Scaleway checks authentication *before* validating that argument, so a
+    # bad/revoked key gets HTTP 401 while a good key gets HTTP 400
+    # ("organization_id required"). That distinction is enough to validate
+    # the key itself without needing any other configuration.
+    code, body, _ = _http_get(
+        "https://api.scaleway.com/iam/v1alpha1/api-keys",
+        headers={"X-Auth-Token": key},
+    )
+    if code is None:
+        return {"valid": False, "detail": body}
+    if code == 401:
+        return {"valid": False, "detail": "HTTP 401"}
+    return {"valid": True, "detail": "authenticated"}
+
+
 def _check_cloudflare(key: str, td: dict | None = None) -> dict:
     account_id = _companion_env(td or {}, "CLOUDFLARE_ACCOUNT_ID") if td else os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
     if not account_id:
@@ -1243,6 +1262,7 @@ _TOKEN_DEFS = [
     {"id": "groq",         "name": "Groq",           "env_var": "GROQ_API_KEY",           "fn": _check_groq},
     {"id": "tavily",    "name": "Tavily",    "env_var": "TAVILY_API_KEY",     "fn": _check_tavily},
     {"id": "elevenlabs", "name": "ElevenLabs", "env_var": "ELEVENLABS_API_KEY", "fn": _check_elevenlabs},
+    {"id": "scaleway",   "name": "Scaleway",   "env_var": "SCALEWAY_API_KEY",   "fn": _check_scaleway},
 ]
 
 
