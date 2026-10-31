@@ -15,6 +15,7 @@ import httpx2 as httpx
 import psutil
 import requests
 
+import auth
 import docker
 from dateutil import parser as date_parser
 from fastapi import FastAPI, Request
@@ -75,6 +76,7 @@ templates = Jinja2Templates(directory=os.path.join(_APP_DIR, "templates"))
 _static_dir = os.path.join(_APP_DIR, "static")
 if os.path.isdir(_static_dir):
     app.mount("/static", StaticFiles(directory=_static_dir), name="static")
+app.include_router(auth.router)
 
 # Content-Security-Policy: only self-hosted assets execute. No inline <script>,
 # no third-party CDNs. 'unsafe-inline' is allowed for styles only because the
@@ -96,7 +98,8 @@ _CSP = (
 
 @app.middleware("http")
 async def _security_headers(request: Request, call_next):
-    resp = await call_next(request)
+    denied = auth.guard(request)
+    resp = denied if denied is not None else await call_next(request)
     resp.headers["Content-Security-Policy"] = _CSP
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["X-Frame-Options"] = "DENY"
@@ -1361,6 +1364,7 @@ async def dashboard(request: Request):
         "version": _VERSION,
         "git_commit": _GIT_COMMIT,
         "tokens_configured": tokens_configured,
+        "auth_email": auth.current_email(request),
     })
 
 

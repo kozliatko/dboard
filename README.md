@@ -134,6 +134,55 @@ itself is unchanged. Only the network edge (TLS, auth) is removed.
 
 ---
 
+## Google OAuth login (optional)
+
+By default dboard relies entirely on Caddy's HTTP Basic Auth (or nothing, in
+demo mode) — the app itself has no login screen. Setting three env vars turns
+on an additional, independent login gate backed by Google Sign-In and an
+explicit server-side allowlist:
+
+```bash
+GOOGLE_OAUTH_CLIENT_ID=
+GOOGLE_OAUTH_CLIENT_SECRET=
+GOOGLE_OAUTH_ALLOWED_EMAILS=alice@example.com,bob@example.com
+```
+
+Leave any of the three empty and the gate stays off — every route behaves
+exactly as it did before this feature existed. With all three set:
+
+- Every page and `/api/*` route requires a session; unauthenticated browser
+  requests are redirected to `/auth/login`, unauthenticated API/XHR requests
+  get `401`.
+- `/auth/login` sends the browser to Google; `/auth/callback` verifies the
+  returned ID token's signature against Google's published keys, then checks
+  `email_verified` and membership in `GOOGLE_OAUTH_ALLOWED_EMAILS`.
+- The allowlist is **re-checked on every request**, not only at login — so
+  removing an email revokes that person's access immediately (after the
+  usual `docker compose up -d` to pick up the env var change), without
+  waiting for their session to expire.
+- `GOOGLE_OAUTH_ALLOWED_EMAILS` is an **exact-match list**, case-insensitive,
+  comma-separated — there is no domain-wildcard mode.
+- `/healthz` always returns `200` unauthenticated (used by the container's
+  own `HEALTHCHECK` and by `depends_on: condition: service_healthy`).
+
+**Setup:**
+
+1. Google Cloud Console → *APIs & Services → Credentials* → create an
+   **OAuth 2.0 Client ID** (type: *Web application*).
+2. Add an **Authorized redirect URI**: `https://<your-domain>/auth/callback`.
+3. Fill in `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` /
+   `GOOGLE_OAUTH_ALLOWED_EMAILS` in `.env`.
+4. Optionally set `GOOGLE_OAUTH_SESSION_SECRET` to a fixed random value
+   (`openssl rand -base64 32`) — without it, a new key is generated on every
+   container start and everyone is signed out on restart.
+5. `docker compose up -d dboard` (restart alone does not reload `.env`).
+
+Combining this with Caddy Basic Auth is supported and not required — either
+layer alone is sufficient; running both just adds a second, independent
+check in front of the app.
+
+---
+
 ## Configuration
 
 ### Environment variables
@@ -493,7 +542,7 @@ shared external `caddy` network.
 | Docker API abuse / container escape | dboard never mounts the raw socket. It talks to `tecnativa/docker-socket-proxy` over TCP, which whitelists **GET** `containers`/`version`/`networks` only — **all writes (POST) are blocked (403)**. A read-only bind mount of `docker.sock` would *not* do this; the socket stays read-write at the API level regardless of `:ro`. |
 | Host filesystem disclosure | Only an empty probe dir on `/` and `/boot` are mounted read-only — **never the host root**. `/etc`, `/root`, `/home`, SSH keys and other projects' `.env` files are not visible to the container. |
 | Privilege escalation | Container runs as **non-root** (uid 10001), `cap_drop: ALL`, `no-new-privileges`, read-only root filesystem (`tmpfs` for `/tmp`). |
-| Unauthenticated access | All traffic is gated by Caddy **HTTP Basic Auth**. Note: containers *already on the shared `caddy` network* can still reach `dboard:8000` directly — treat that network as trusted. |
+| Unauthenticated access | All traffic is gated by Caddy **HTTP Basic Auth**. Note: containers *already on the shared `caddy` network* can still reach `dboard:8000` directly — treat that network as trusted. An optional second, independent gate — [Google OAuth with a server-side email allowlist](#google-oauth-login-optional) — can be layered on top. |
 | API key exposure | Keys read from environment; only a minimal redacted hint (`first3···last2`) is sent to the browser — never the raw key. Forced re-validation (`?refresh=true`) is throttled server-wide to protect upstream rate limits / paid balances. |
 | Cross-site scripting | All dynamic values are HTML-escaped. A strict **Content-Security-Policy** (`script-src 'self'`, no inline scripts, no third-party CDNs) is sent on every response, plus `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`. |
 | Supply chain | No runtime CDN — Tailwind is compiled to a static stylesheet at image build time. Python deps are pinned. CI runs **gitleaks** (secret scan) and **trivy** (vuln scan). |

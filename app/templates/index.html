@@ -639,6 +639,11 @@
       <p id="summary" class="text-sm text-gray-500" style="margin-left:2.375rem">loading…</p>
     </div>
     <div class="shrink-0 mt-1 flex items-center gap-1.5">
+      {% if auth_email %}
+      <span class="mono text-xs text-gray-600" title="Signed in">{{ auth_email }}</span>
+      <a href="/auth/logout" class="mono text-xs text-gray-600" style="text-decoration:underline" title="Sign out">sign out</a>
+      <span class="text-gray-700">·</span>
+      {% endif %}
       <span id="sync-dot" class="sync-dot" title="Refreshing…"></span>
       <div id="clock" class="mono text-xs text-gray-600"></div>
     </div>

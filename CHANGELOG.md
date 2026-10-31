@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Optional Google OAuth login gate** — disabled by default; setting
+  `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` and
+  `GOOGLE_OAUTH_ALLOWED_EMAILS` turns on a login screen backed by Google
+  Sign-In and an explicit, server-side email allowlist. The allowlist is
+  re-checked on every request (not just at login), so revoking an email
+  takes effect immediately rather than waiting for the session to expire.
+  Adds a new `/healthz` endpoint (always unauthenticated) and switches the
+  container `HEALTHCHECK` to use it instead of `/`. Can run standalone or
+  stacked on top of the existing Caddy Basic Auth.
 - **Scaleway API key validator** — authentication-only check via
   `GET /iam/v1alpha1/api-keys`. A bare Scaleway secret key has no
   organization context by itself, so there's no self-contained "list my
