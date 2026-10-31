@@ -42,6 +42,15 @@ RUN useradd -u 10001 -r -s /usr/sbin/nologin appuser \
 USER appuser
 
 EXPOSE 8000
+# /healthz is exempt from the optional Google OAuth gate (see app/auth.py) —
+# unlike "/", it always returns 200 so the container health status stays
+# meaningful whether or not OAuth is enabled.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/')" || exit 1
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')" || exit 1
+# --proxy-headers trusts X-Forwarded-Proto/-Host from upstream so
+# request.url.scheme reports "https" and the OAuth redirect_uri matches what's
+# registered with Google. Safe to trust from any peer here: this container
+# publishes no ports and is only reachable via the internal "caddy"/"default"
+# compose networks — Caddy is the only thing that can connect to port 8000.
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", \
+     "--proxy-headers", "--forwarded-allow-ips=*"]

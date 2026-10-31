@@ -357,6 +357,10 @@
         if (xhr.status >= 200 && xhr.status < 300) {
           try { resolve(JSON.parse(xhr.responseText)); }
           catch(e) { reject(new Error('JSON parse error')); }
+        } else if (xhr.status === 401) {
+          // Session expired or was revoked (e.g. removed from the allowlist) —
+          // bounce the whole page to sign-in instead of looping failed polls.
+          location.href = '/auth/login';
         } else {
           reject(new Error(`HTTP ${xhr.status}`));
         }
