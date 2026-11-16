@@ -549,6 +549,7 @@ shared external `caddy` network.
 | Cross-site scripting | All dynamic values are HTML-escaped. A strict **Content-Security-Policy** (`script-src 'self'`, no inline scripts, no third-party CDNs) is sent on every response, plus `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`. |
 | Supply chain | No runtime CDN — Tailwind is compiled to a static stylesheet at image build time. Python deps are pinned. CI runs **gitleaks** (secret scan) and **trivy** (vuln scan). |
 | Secrets in git | `.env` is in `.gitignore`; only `.env.example` (with empty values) is committed. |
+| Secrets at rest | `.env` holds plaintext API keys and should be `chmod 600` (owner read/write only) on the host — it is not created with those permissions automatically by `cp .env.example .env`. |
 | Startup race condition | `dboard` uses `depends_on: condition: service_healthy` and only starts after `socket-proxy` passes its health check (`wget /version` every 30 s). |
 
 ---

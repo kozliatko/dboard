@@ -30,6 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shows remaining/plan credits and the current billing period end.
   Configured via `FIRECRAWL_API_KEY`.
 
+### Security
+- Documented that `.env` should be `chmod 600` on the host — `cp
+  .env.example .env` does not set that automatically, and it was found
+  world/group-readable in production (now corrected).
+
 ## [0.3.17] - 2026-09-04
 
 ### Added
