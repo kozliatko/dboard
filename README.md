@@ -212,6 +212,8 @@ All variables are optional. Leave any blank to disable that token check.
 | `ELEVENLABS_API_KEY` | ElevenLabs API key |
 | `SCALEWAY_API_KEY` | Scaleway secret key |
 | `FIRECRAWL_API_KEY` | Firecrawl API key |
+| `CARTO_API_KEY` | CARTO API Access Token |
+| `CARTO_REGION` | CARTO account region (default: `gcp-us-east1`; also `gcp-europe-west1`, `gcp-asia-northeast1`, `gcp-australia-southeast1`) |
 
 Copy `.env.example` to `.env` and populate the keys you want validated.
 
@@ -445,6 +447,9 @@ Each card shows:
     organization context, so there's nothing else to show without
     additional configuration)
   - **Firecrawl** — remaining/plan credits, billing period end
+  - **CARTO** — authentication only, via the Location Data Services quota
+    endpoint (region-specific host, `CARTO_REGION`); its response shape
+    isn't documented, so whatever scalar fields it returns are shown as-is
 
 Only **GitHub** and **GitLab** currently expose a token expiry date; those
 are the only providers that can trigger the amber "expiring soon" state.

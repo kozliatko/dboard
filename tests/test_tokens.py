@@ -16,6 +16,7 @@ from main import (
     _check_elevenlabs,
     _check_scaleway,
     _check_firecrawl,
+    _check_carto,
     _check_gitlab,
     _check_huggingface,
     _check_groq,
@@ -369,6 +370,41 @@ class TestCheckFirecrawl:
         with patch("main._http_get", return_value=_net_err()):
             r = _check_firecrawl(FAKE_KEY)
         assert r["valid"] is False
+
+
+# ── CARTO ─────────────────────────────────────────────────────────────────────
+
+class TestCheckCarto:
+    def test_valid_default_region(self):
+        body = {"used": 120, "quota": 10000, "other": "ignored-if-not-scalar-friendly"}
+        with patch("main._http_get", return_value=_ok(body)) as http_get:
+            r = _check_carto(FAKE_KEY)
+        assert r["valid"] is True
+        assert http_get.call_args.args[0] == "https://gcp-us-east1.api.carto.com/v3/lds/stats"
+        assert http_get.call_args.kwargs["headers"] == {"Authorization": f"Bearer {FAKE_KEY}"}
+        labels = {e["label"]: e["value"] for e in r["extras"]}
+        assert labels["Region"] == "gcp-us-east1"
+        assert labels["used"] == "120"
+        assert labels["quota"] == "10000"
+
+    def test_valid_custom_region(self):
+        with patch("main._http_get", return_value=_ok({})) as http_get, \
+             patch.dict("os.environ", {"CARTO_REGION": "gcp-europe-west1"}):
+            r = _check_carto(FAKE_KEY)
+        assert r["valid"] is True
+        assert http_get.call_args.args[0] == "https://gcp-europe-west1.api.carto.com/v3/lds/stats"
+
+    def test_invalid_key(self):
+        with patch("main._http_get", return_value=_err(401)):
+            r = _check_carto(FAKE_KEY)
+        assert r["valid"] is False
+        assert "401" in r["detail"]
+
+    def test_network_error(self):
+        with patch("main._http_get", return_value=_net_err()):
+            r = _check_carto(FAKE_KEY)
+        assert r["valid"] is False
+        assert "Connection refused" in r["detail"]
 
 
 # ── GitLab ────────────────────────────────────────────────────────────────────

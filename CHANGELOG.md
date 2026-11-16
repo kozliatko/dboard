@@ -29,6 +29,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Firecrawl API key validator** — checks `GET /v2/team/credit-usage`;
   shows remaining/plan credits and the current billing period end.
   Configured via `FIRECRAWL_API_KEY`.
+- **CARTO API key validator** — authentication-only check via
+  `GET /v3/lds/stats` (Location Data Services quota). CARTO has no single
+  global API host; the region-specific base URL is configurable via
+  `CARTO_REGION` (default `gcp-us-east1`). The endpoint's response shape
+  isn't documented publicly, so recognized scalar fields are shown as-is
+  rather than mapped to named labels — confirmed live that an invalid
+  token gets a clean `HTTP 401`, but the success shape has not yet been
+  confirmed against a real account. Configured via `CARTO_API_KEY`.
 
 ## [0.3.17] - 2026-09-04
 
