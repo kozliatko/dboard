@@ -64,7 +64,7 @@ jobs:
           cache: 'false'   # skip the internal (Node 20) actions/cache step
 
       - name: Snyk dependency vulnerability scan
-        uses: snyk/actions/python-3.10@12140f4059e244892ae643824a95459a102120dd # master
+        uses: snyk/actions/python-3.10@b075801f26076be9bb50521154cafab73f44da0c # master
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
