@@ -1272,6 +1272,35 @@ def _check_firecrawl(key: str, td: dict | None = None) -> dict:
     }
 
 
+def _check_carto(key: str, td: dict | None = None) -> dict:
+    # CARTO has no single global API host — the base URL is regional, chosen
+    # per account at token-creation time (Developers > API keys in the CARTO
+    # Workspace). Default to the most common region; override with
+    # CARTO_REGION if the account lives elsewhere.
+    region = (_companion_env(td, "CARTO_REGION", "gcp-us-east1") if td else os.environ.get("CARTO_REGION", "gcp-us-east1")).strip()
+    code, body, _ = _http_get(
+        f"https://{region}.api.carto.com/v3/lds/stats",
+        headers={"Authorization": f"Bearer {key}"},
+    )
+    if code is None:
+        return {"valid": False, "detail": body}
+    if code != 200:
+        return {"valid": False, "detail": f"HTTP {code}"}
+    # /v3/lds/stats ("get LDS quota usage") has no documented response shape
+    # in CARTO's public API reference — surface whatever scalar fields it
+    # returns rather than guessing field names that may not match reality.
+    data = json.loads(body)
+    extras = [("Region", region)]
+    for k, v in list(data.items())[:6]:
+        if isinstance(v, (str, int, float)):
+            extras.append((k, str(v)))
+    return {
+        "valid": True,
+        "detail": "authenticated",
+        "extras": _extras(*extras),
+    }
+
+
 _TOKEN_DEFS = [
     {"id": "anthropic", "name": "Anthropic", "env_var": "ANTHROPIC_API_KEY", "fn": _check_anthropic},
     {"id": "github",    "name": "GitHub",    "env_var": "GITHUB_TOKEN",       "fn": _check_github},
@@ -1289,6 +1318,7 @@ _TOKEN_DEFS = [
     {"id": "elevenlabs", "name": "ElevenLabs", "env_var": "ELEVENLABS_API_KEY", "fn": _check_elevenlabs},
     {"id": "scaleway",   "name": "Scaleway",   "env_var": "SCALEWAY_API_KEY",   "fn": _check_scaleway},
     {"id": "firecrawl",  "name": "Firecrawl",  "env_var": "FIRECRAWL_API_KEY",  "fn": _check_firecrawl},
+    {"id": "carto",      "name": "CARTO",      "env_var": "CARTO_API_KEY",      "fn": _check_carto},
 ]
 
 
