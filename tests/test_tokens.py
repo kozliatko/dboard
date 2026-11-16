@@ -15,6 +15,7 @@ from main import (
     _check_tavily,
     _check_elevenlabs,
     _check_scaleway,
+    _check_firecrawl,
     _check_gitlab,
     _check_huggingface,
     _check_groq,
@@ -333,6 +334,41 @@ class TestCheckScaleway:
             r = _check_scaleway(FAKE_KEY)
         assert r["valid"] is False
         assert "Connection refused" in r["detail"]
+
+
+# ── Firecrawl ─────────────────────────────────────────────────────────────────
+
+class TestCheckFirecrawl:
+    def test_valid(self):
+        body = {
+            "success": True,
+            "data": {
+                "remainingCredits": 499000,
+                "planCredits": 500000,
+                "billingPeriodStart": "2026-11-01T00:00:00Z",
+                "billingPeriodEnd": "2026-11-30T23:59:59Z",
+            },
+        }
+        with patch("main._http_get", return_value=_ok(body)) as http_get:
+            r = _check_firecrawl(FAKE_KEY)
+        assert r["valid"] is True
+        assert "499,000" in r["detail"]
+        assert http_get.call_args.kwargs["headers"] == {"Authorization": f"Bearer {FAKE_KEY}"}
+        labels = {e["label"]: e["value"] for e in r["extras"]}
+        assert labels["Remaining credits"] == "499,000"
+        assert labels["Plan credits"] == "500,000"
+        assert labels["Billing period ends"] == "2026-11-30"
+
+    def test_invalid_key(self):
+        with patch("main._http_get", return_value=_err(401)):
+            r = _check_firecrawl(FAKE_KEY)
+        assert r["valid"] is False
+        assert "401" in r["detail"]
+
+    def test_network_error(self):
+        with patch("main._http_get", return_value=_net_err()):
+            r = _check_firecrawl(FAKE_KEY)
+        assert r["valid"] is False
 
 
 # ── GitLab ────────────────────────────────────────────────────────────────────

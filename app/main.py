@@ -1250,6 +1250,28 @@ def _check_gitlab(key: str, td: dict | None = None) -> dict:
     }
 
 
+def _check_firecrawl(key: str, td: dict | None = None) -> dict:
+    code, body, _ = _http_get(
+        "https://api.firecrawl.dev/v2/team/credit-usage",
+        headers={"Authorization": f"Bearer {key}"},
+    )
+    if code != 200:
+        return {"valid": False, "detail": f"HTTP {code}"}
+    data = json.loads(body).get("data", {})
+    remaining = data.get("remainingCredits")
+    plan = data.get("planCredits")
+    period_end = (data.get("billingPeriodEnd") or "")[:10]
+    return {
+        "valid": True,
+        "detail": f"{remaining:,} credits left" if remaining is not None else "OK",
+        "extras": _extras(
+            ("Remaining credits", f"{remaining:,}" if remaining is not None else None),
+            ("Plan credits", f"{plan:,}" if plan is not None else None),
+            ("Billing period ends", period_end or None),
+        ),
+    }
+
+
 _TOKEN_DEFS = [
     {"id": "anthropic", "name": "Anthropic", "env_var": "ANTHROPIC_API_KEY", "fn": _check_anthropic},
     {"id": "github",    "name": "GitHub",    "env_var": "GITHUB_TOKEN",       "fn": _check_github},
@@ -1266,6 +1288,7 @@ _TOKEN_DEFS = [
     {"id": "tavily",    "name": "Tavily",    "env_var": "TAVILY_API_KEY",     "fn": _check_tavily},
     {"id": "elevenlabs", "name": "ElevenLabs", "env_var": "ELEVENLABS_API_KEY", "fn": _check_elevenlabs},
     {"id": "scaleway",   "name": "Scaleway",   "env_var": "SCALEWAY_API_KEY",   "fn": _check_scaleway},
+    {"id": "firecrawl",  "name": "Firecrawl",  "env_var": "FIRECRAWL_API_KEY",  "fn": _check_firecrawl},
 ]
 
 
