@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `HTTP 400` ("organization_id required") — that distinction is enough to
   validate the key without further configuration. Configured via
   `SCALEWAY_API_KEY`.
+- **Firecrawl API key validator** — checks `GET /v2/team/credit-usage`;
+  shows remaining/plan credits and the current billing period end.
+  Configured via `FIRECRAWL_API_KEY`.
 
 ## [0.3.17] - 2026-09-04
 
